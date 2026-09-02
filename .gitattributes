@@ -1,0 +1,14 @@
+# Normalise to LF in the repository; check out native on Windows.
+* text=auto
+
+# Keep these LF everywhere — they are read by Linux-side tooling.
+*.pipe   text eol=lf
+*.sh     text eol=lf
+*.toml   text eol=lf
+
+# Never touch binary-ish assets.
+*.svg    text
+*.png    binary
+*.jpg    binary
+*.mp4    binary
+pnpm-lock.yaml  linguist-generated=true
