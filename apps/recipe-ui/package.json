@@ -1,6 +1,6 @@
 {
 	"name": "karanjit_singh-recipe",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"private": true,
 	"description": "Turns a cooking reel into a recipe a first-time cook can actually follow — real quantities instead of \"a little\", and what to do with only what's in your fridge.",
 	"license": "MIT",
