@@ -145,6 +145,50 @@ Collected from the platform docs and from breaking them:
 
 ---
 
+## The merged environment includes the server's own process environment
+
+`${ROCKETRIDE_OPENAI_KEY}` is not in the workspace `.env`, and the app depends on it for
+every model call — so the obvious worry was that it lived in the *user* secret layer of
+one account, and would silently fail to resolve for anyone else launching the app.
+
+It does not. Measured with `client.account`:
+
+| Source | Contains `ROCKETRIDE_OPENAI_KEY`? |
+|---|---|
+| Workspace `.env` | no |
+| `getEnv('user')` | no — holds only `ROCKETRIDE_ANTHROPIC_KEY` |
+| `getEnv('org', orgId)` | no — empty |
+| `getEnv('team', devTeam)` | no — empty |
+| `getEnvironmentKeys()` (merged) | **yes** |
+
+Present in the merge, absent from all three account scopes. The rest of the merged set
+explains where it comes from: alongside it sit `ROCKETRIDE_ALB_PORT_5565_TCP_ADDR`,
+`ROCKETRIDE_EAAS_SERVICE_HOST` and fourteen more of the same shape — Kubernetes
+service-discovery variables, which can only be injected into the server pod's own
+process environment.
+
+**So the merged environment is `process env + org + team + user`,** and the model key
+lives in the first of those. A process environment is a property of the server, not of
+whoever authenticated against it — it is identical for every account on that host.
+
+Confirmed identical on both the dev and the deploy connection, which on staging turn out
+to be the same host and the same credential.
+
+**Consequence.** Nothing the app depends on is account-scoped. The one account-scoped
+secret that does exist, `ROCKETRIDE_ANTHROPIC_KEY` in the user layer, is referenced by no
+pipeline and no source file — verified with `git grep`.
+
+**Caveat worth stating.** This proves the key is not tied to *this* account. Proving that
+a second, unrelated account sees the same merged value would need a second account, which
+was not available. The mechanism makes it near-certain, and every account-scoped
+alternative has been positively ruled out rather than assumed.
+
+**Method note.** `setEnv(scope, env)` replaces the **entire** dictionary at that level
+rather than merging into it. Read, merge, write back — a naive `setEnv` call silently
+destroys every other key in that scope.
+
+---
+
 ## Still unmeasured
 
 Honest gaps, so nobody assumes these are known:
@@ -152,6 +196,3 @@ Honest gaps, so nobody assumes these are known:
 - **`frame_grabber` sampling rate.** Frame grab plus OCR is 71s of the 165s total and is
   the remaining bottleneck. Its sampling config field names are absent from both the
   schema and the docs, so capping it needs experimentation.
-- **Model key resolution across accounts.** `${ROCKETRIDE_OPENAI_KEY}` resolves from the
-  platform env layer. Whether it resolves under an account other than the author's has
-  never been tested, and an org-scoped key has not been tried.

@@ -205,6 +205,13 @@ any other `${VAR}` arrives as `<REDACTED>`.
 | `APIFY_TOKEN` | Instagram resolution | Cloudflare secret only |
 | `ALLOWED_ORIGINS` | Origins the Worker will echo | `resolver/wrangler.toml` |
 
-`ROCKETRIDE_OPENAI_KEY` resolving from the platform's own env layer rather than this
-repository is deliberate — but see the Status section of the top-level README for the
-one thing about it that is still unverified.
+`ROCKETRIDE_OPENAI_KEY` resolves from the staging server's own **process** environment,
+not from any org, team, or user secret layer — measured, with the method and evidence in
+[PLATFORM_NOTES.md](PLATFORM_NOTES.md). That matters for a reviewer launching the app
+under their own account: nothing the app depends on is account-scoped, so the key
+resolves for them exactly as it does for the author.
+
+Should a model credential ever fail to resolve, the substitution is passed through as
+literal text and the provider rejects it as a malformed key. `errText()` in `App.tsx`
+recognises that shape and reports a missing server-side credential rather than showing a
+bare 401, which would read as a broken app rather than a configuration gap.

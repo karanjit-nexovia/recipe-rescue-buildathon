@@ -145,9 +145,13 @@ here rather than hidden:
 
 - The full adverse-input test matrix (private/deleted reels, expired CDN links,
   oversized uploads, cold launch) is specified but has not been run end to end.
-- Model-key resolution has only been verified under the author's own account.
 - 165s per recipe is dominated by frame-grab and OCR at 71s; the sampling rate is
   governed by config fields absent from the platform schema.
+
+Closed: the model credential was suspected of being tied to the author's account, which
+would have meant the app failing for anyone else who launched it. It is not — it resolves
+from the server's process environment, and every account-scoped alternative was ruled out
+by measurement. Evidence in [docs/PLATFORM_NOTES.md](docs/PLATFORM_NOTES.md).
 
 ## Licence
 

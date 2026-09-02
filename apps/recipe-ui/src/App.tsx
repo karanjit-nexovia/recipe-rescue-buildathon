@@ -162,6 +162,14 @@ const errText = (err: unknown): string => {
 	const msg = (err as Error)?.message ?? String(err);
 	if (/already running/i.test(msg)) return 'That pipeline is already running — try again in a moment.';
 	if (/not connected/i.test(msg)) return 'Still connecting to RocketRide. Give it a second and retry.';
+	// An unresolved ${ROCKETRIDE_*} substitution is passed through as literal
+	// text, so the model provider rejects it as a malformed key. That reads as
+	// a generic 401 and looks like a broken app; it is a missing server-side
+	// secret, and only the operator can fix it. Say so rather than showing the
+	// raw upstream string.
+	if (/\$\{ROCKETRIDE_|invalid[_ ]api[_ ]key|incorrect api key|unauthoriz|\b401\b/i.test(msg)) {
+		return 'The model credential is not configured on this server, so the recipe step cannot run. Everything else in the app still works — saved recipes open normally.';
+	}
 	return msg || 'Something went wrong.';
 };
 
