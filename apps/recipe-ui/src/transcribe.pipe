@@ -1,0 +1,173 @@
+{
+	"components": [
+		{
+			"id": "webhook_1",
+			"provider": "webhook",
+			"config": {
+				"hideForm": true,
+				"mode": "Source",
+				"parameters": {},
+				"type": "webhook"
+			},
+			"ui": {
+				"position": {
+					"x": 20,
+					"y": 200
+				},
+				"measured": {
+					"width": 150,
+					"height": 66
+				}
+			}
+		},
+		{
+			"id": "parse_1",
+			"provider": "parse",
+			"config": {
+				"parameters": {}
+			},
+			"input": [
+				{
+					"lane": "tags",
+					"from": "webhook_1"
+				}
+			],
+			"ui": {
+				"position": {
+					"x": 220,
+					"y": 200
+				},
+				"measured": {
+					"width": 150,
+					"height": 66
+				}
+			}
+		},
+		{
+			"id": "audio_transcribe_1",
+			"provider": "audio_transcribe",
+			"config": {
+				"parameters": {}
+			},
+			"input": [
+				{
+					"lane": "audio",
+					"from": "parse_1"
+				},
+				{
+					"lane": "video",
+					"from": "parse_1"
+				}
+			],
+			"ui": {
+				"position": {
+					"x": 430,
+					"y": 110
+				},
+				"measured": {
+					"width": 150,
+					"height": 66
+				}
+			}
+		},
+		{
+			"id": "response_text_1",
+			"provider": "response_text",
+			"config": {
+				"laneName": "transcript"
+			},
+			"input": [
+				{
+					"lane": "text",
+					"from": "audio_transcribe_1"
+				}
+			],
+			"ui": {
+				"position": {
+					"x": 650,
+					"y": 110
+				},
+				"measured": {
+					"width": 150,
+					"height": 66
+				}
+			}
+		},
+		{
+			"id": "frame_grabber_1",
+			"provider": "frame_grabber",
+			"config": {
+				"parameters": {}
+			},
+			"input": [
+				{
+					"lane": "video",
+					"from": "parse_1"
+				}
+			],
+			"ui": {
+				"position": {
+					"x": 430,
+					"y": 300
+				},
+				"measured": {
+					"width": 150,
+					"height": 66
+				}
+			}
+		},
+		{
+			"id": "ocr_1",
+			"provider": "ocr",
+			"config": {
+				"parameters": {}
+			},
+			"input": [
+				{
+					"lane": "image",
+					"from": "frame_grabber_1"
+				}
+			],
+			"ui": {
+				"position": {
+					"x": 650,
+					"y": 300
+				},
+				"measured": {
+					"width": 150,
+					"height": 66
+				}
+			}
+		},
+		{
+			"id": "response_text_2",
+			"provider": "response_text",
+			"config": {
+				"laneName": "screentext"
+			},
+			"input": [
+				{
+					"lane": "text",
+					"from": "ocr_1"
+				}
+			],
+			"ui": {
+				"position": {
+					"x": 870,
+					"y": 300
+				},
+				"measured": {
+					"width": 150,
+					"height": 66
+				}
+			}
+		}
+	],
+	"project_id": "6a6a0004-df0a-40f8-8974-6a6338eee452",
+	"viewport": {
+		"x": 0,
+		"y": 0,
+		"zoom": 1
+	},
+	"version": 1
+}

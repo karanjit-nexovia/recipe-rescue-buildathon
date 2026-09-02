@@ -1,0 +1,42 @@
+{
+	"name": "karanjit_singh-recipe",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Turns a cooking reel into a recipe a first-time cook can actually follow — real quantities instead of \"a little\", and what to do with only what's in your fridge.",
+	"license": "MIT",
+	"appManifest": {
+		"id": "karanjit_singh.recipe",
+		"publisher": "karanjit_singh",
+		"name": "Recipe Rescue",
+		"description": "Turns a cooking reel into a recipe a first-time cook can actually follow — real quantities instead of \"a little\", and what to do with only what's in your fridge.",
+		"icon": "./icon.svg",
+		"readme": "./README.md",
+		"categories": [
+			"custom"
+		],
+		"mode": "free",
+		"authenticated": false,
+		"projectId": "ec710a19-a7b2-4cf1-99aa-839c136813fb"
+	},
+	"scripts": {
+		"dev": "rsbuild dev",
+		"build": "tsc --noEmit && rsbuild build",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
+		"rocketride": "file:../../.rocketride/client/rocketride.tgz",
+		"shell": "file:../../.rocketride/shell/shell.tgz"
+	},
+	"devDependencies": {
+		"@module-federation/rsbuild-plugin": "2.5.1",
+		"@rsbuild/core": "~2.0.11",
+		"@rsbuild/plugin-react": "~2.0.1",
+		"@types/node": "^20.19.41",
+		"@types/react": "^18.2.0",
+		"@types/react-dom": "^18.2.0",
+		"react-refresh": "^0.14.2",
+		"typescript": "^5.3.0"
+	}
+}

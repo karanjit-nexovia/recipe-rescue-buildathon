@@ -1,0 +1,27 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Staging Doctor",
+      "type": "msedge",
+      "request": "launch",
+      "url": "https://staging.rocketride.ai:443/?appid=local.staging-doctor&rrdev=1",
+      "webRoot": "${workspaceFolder}/apps/staging-doctor-ui",
+      "sourceMapPathOverrides": {
+        "webpack:///./*": "${workspaceFolder}/apps/staging-doctor-ui/*",
+        "webpack:///*": "*"
+      }
+    },
+    {
+      "name": "Debug Recipe Rescue",
+      "type": "msedge",
+      "request": "launch",
+      "url": "https://staging.rocketride.ai:443/?appid=karanjit_singh.recipe&rrdev=1",
+      "webRoot": "${workspaceFolder}/apps/recipe-ui",
+      "sourceMapPathOverrides": {
+        "webpack:///./*": "${workspaceFolder}/apps/recipe-ui/*",
+        "webpack:///*": "*"
+      }
+    }
+  ]
+}

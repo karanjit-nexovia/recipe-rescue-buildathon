@@ -1,0 +1,42 @@
+{
+  "name": "local-staging-doctor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Staging Doctor — a RocketRide app",
+  "license": "MIT",
+  "appManifest": {
+    "id": "karanjit_singh.staging-doctor",
+    "publisher": "local",
+    "name": "Staging Doctor",
+    "description": "Staging Doctor — a RocketRide app",
+    "icon": "./icon.svg",
+    "readme": "./README.md",
+    "categories": [
+      "custom"
+    ],
+    "mode": "free",
+    "authenticated": false,
+    "projectId": "6eaad73d-b0f0-413c-aaaf-56b6872b7d91"
+  },
+  "scripts": {
+    "dev": "rsbuild dev",
+    "build": "tsc --noEmit && rsbuild build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "rocketride": "file:../../.rocketride/client/rocketride.tgz",
+    "shell": "file:../../.rocketride/shell/shell.tgz"
+  },
+  "devDependencies": {
+    "@module-federation/rsbuild-plugin": "2.5.1",
+    "@rsbuild/core": "~2.0.11",
+    "@rsbuild/plugin-react": "~2.0.1",
+    "@types/node": "^20.19.41",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "react-refresh": "^0.14.2",
+    "typescript": "^5.3.0"
+  }
+}

@@ -1,0 +1,10 @@
+name = "recipe-rescue-resolver"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+[vars]
+# Comma-separated. The Worker echoes only an origin present in this list.
+ALLOWED_ORIGINS = "https://staging.rocketride.ai"
+
+# APIFY_TOKEN is a SECRET, not a var. Never put it in this file.
+#   npx wrangler secret put APIFY_TOKEN

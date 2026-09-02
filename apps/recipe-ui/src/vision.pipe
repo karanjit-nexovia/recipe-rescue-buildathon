@@ -1,0 +1,127 @@
+{
+	"components": [
+		{
+			"id": "webhook_1",
+			"provider": "webhook",
+			"config": {
+				"hideForm": true,
+				"mode": "Source",
+				"parameters": {},
+				"type": "webhook"
+			},
+			"ui": {
+				"position": {
+					"x": 20,
+					"y": 200
+				},
+				"measured": {
+					"width": 150,
+					"height": 66
+				}
+			}
+		},
+		{
+			"id": "parse_1",
+			"provider": "parse",
+			"config": {
+				"parameters": {}
+			},
+			"input": [
+				{
+					"lane": "tags",
+					"from": "webhook_1"
+				}
+			],
+			"ui": {
+				"position": {
+					"x": 220,
+					"y": 200
+				},
+				"measured": {
+					"width": 150,
+					"height": 66
+				}
+			}
+		},
+		{
+			"id": "frame_grabber_1",
+			"provider": "frame_grabber",
+			"config": {
+				"parameters": {}
+			},
+			"input": [
+				{
+					"lane": "video",
+					"from": "parse_1"
+				}
+			],
+			"ui": {
+				"position": {
+					"x": 430,
+					"y": 200
+				},
+				"measured": {
+					"width": 150,
+					"height": 66
+				}
+			}
+		},
+		{
+			"id": "image_vision_1",
+			"provider": "image_vision_openai",
+			"config": {
+				"profile": "openai-4o",
+				"openai-4o": {
+					"apikey": "${ROCKETRIDE_OPENAI_KEY}"
+				},
+				"parameters": {}
+			},
+			"input": [
+				{
+					"lane": "image",
+					"from": "frame_grabber_1"
+				}
+			],
+			"ui": {
+				"position": {
+					"x": 650,
+					"y": 200
+				},
+				"measured": {
+					"width": 150,
+					"height": 66
+				}
+			}
+		},
+		{
+			"id": "response_text_1",
+			"provider": "response_text",
+			"config": {
+				"laneName": "scenes"
+			},
+			"input": [
+				{
+					"lane": "text",
+					"from": "image_vision_1"
+				}
+			],
+			"ui": {
+				"position": {
+					"x": 870,
+					"y": 200
+				},
+				"measured": {
+					"width": 150,
+					"height": 66
+				}
+			}
+		}
+	],
+	"project_id": "b42337bd-8794-4071-a44b-20e52870027d",
+	"viewport": {
+		"x": 0,
+		"y": 0,
+		"zoom": 1
+	},
+	"version": 1
+}

@@ -1,0 +1,22 @@
+# --- Secrets. Never commit. ---------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- Vendored platform SDK ----------------------------------------------------
+# .rocketride/ is the RocketRide client + shell tarballs and generated schema,
+# fetched per workspace. It is large, machine-generated, and not ours to publish.
+.rocketride/
+
+# --- Dependencies and build output --------------------------------------------
+**/node_modules/
+**/dist/
+.wrangler/
+**/.wrangler/
+
+# --- OS / editor cruft --------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.log
