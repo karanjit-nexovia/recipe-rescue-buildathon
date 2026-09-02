@@ -165,6 +165,18 @@ export function buildExtractionQuestion(
 			'empty array and say so in missingInfo. Never invent a recipe from nothing.',
 	);
 
+	q.addInstruction(
+		'The header is held to the same standard as the steps',
+		'cuisine, servings and totalMinutes are claims too, and they are the first thing the ' +
+			'reader sees. Omit any you cannot support from the source — an absent field is ' +
+			'correct, and the page renders without it. Never state them while refusing the body: ' +
+			'if you are returning no ingredients and no steps because there was nothing to read, ' +
+			'then you do not know the cuisine, you do not know how many it serves, and you do not ' +
+			'know how long it takes. Leave all three out. "serves 4" printed beside "no ' +
+			'ingredients could be read" tells the reader the source said something about portions ' +
+			'when it did not, and a beginner has no way to tell which half to trust.',
+	);
+
 	q.addExample('A reel about jeera aloo', RECIPE_EXAMPLE);
 
 	// Many reels are silent, fast-cut and captionless. When that is all we

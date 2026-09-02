@@ -405,6 +405,24 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 						: 'No words in this reel — building the recipe from what the frames show',
 				);
 				const parsed = await extractRecipe(transcript, screenText, scenes);
+
+				// A recipe with neither ingredients nor steps is not a recipe, and
+				// the recipe view is the wrong place to say so: it offers "Start
+				// cooking" on nothing to cook, "Save to my book" on an empty shell,
+				// and a fridge box that would spend another model call comparing
+				// your kitchen against no ingredients. The model is instructed not
+				// to produce this, but model output is data rather than a contract,
+				// so the UI must not depend on it having complied.
+				const hasBody = Boolean(parsed.ingredients?.length) || Boolean(parsed.steps?.length);
+				if (!hasBody) {
+					const why = parsed.missingInfo?.length
+						? ` Here is what was missing: ${parsed.missingInfo.slice(0, 3).join(' ')}`
+						: '';
+					throw new Error(
+						`There was not enough in that ${payload.link ? 'link' : payload.file ? 'video' : 'text'} to build a recipe from.${why} Paste the recipe text below, or drop the video in.`,
+					);
+				}
+
 				setRecipe(parsed);
 				setSavedId(null);
 				setView('recipe');
