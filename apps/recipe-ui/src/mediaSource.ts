@@ -58,6 +58,8 @@ export type ResolveErrorCode =
 	| 'no-media'
 	| 'media-expired'
 	| 'media-blocked'
+	/** The browser refused the request before it reached the CDN — see fetchMediaAsFile. */
+	| 'media-unreachable'
 	| 'media-too-large'
 	| 'not-video'
 	| 'network';
@@ -393,8 +395,20 @@ export async function fetchMediaAsFile(source: MediaSource, signal?: AbortSignal
 		if ((err as Error)?.name === 'AbortError') {
 			throw new ResolveError('resolver-timeout', 'Downloading that video took too long.', true);
 		}
-		// A CORS refusal surfaces here as an opaque TypeError.
-		throw new ResolveError('media-blocked', 'The video could not be downloaded from that link.', true);
+		// fetch() rejected before any response arrived, so there is no status to
+		// report and the reason is deliberately hidden from us. In practice this
+		// is the browser refusing the request, not the CDN: a tracker/ad blocker
+		// or strict privacy mode dropping *.cdninstagram.com is by far the most
+		// common cause, since the CDN itself answers with
+		// `Access-Control-Allow-Origin: *`.
+		//
+		// NOT retryable: re-resolving yields a different signed URL on the same
+		// blocked host, so a retry fails identically after another actor run.
+		// The caller falls back to the caption instead, which is the useful move.
+		throw new ResolveError(
+			'media-unreachable',
+			'Your browser blocked the download from Instagram’s video servers — usually an ad or tracker blocker.',
+		);
 	} finally {
 		clearTimeout(timer);
 		signal?.removeEventListener('abort', onAbort);

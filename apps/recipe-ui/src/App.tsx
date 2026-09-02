@@ -255,10 +255,24 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			return await fetchMediaAsFile(source, abortRef.current?.signal);
 		} catch (err) {
 			if (!(err instanceof ResolveError) || !err.retryable) throw err;
-			setBusy('That video link had expired — fetching a fresh one');
+			// Only an expiry is worth announcing as one. Re-resolving costs an
+			// actor run and several seconds, so do not tell the user their link
+			// expired when the real failure was something else entirely.
+			setBusy(
+				err.code === 'media-expired'
+					? 'That video link had expired — fetching a fresh one'
+					: 'Retrying that download',
+			);
 			const again = await resolveMediaSource(rawLink);
 			if (again.kind !== 'media') throw err;
-			return fetchMediaAsFile(again.source, abortRef.current?.signal);
+			// Surface the FIRST failure if the retry fails too: the second error
+			// is a symptom of the same cause, and the first one is the honest
+			// description of what went wrong.
+			try {
+				return await fetchMediaAsFile(again.source, abortRef.current?.signal);
+			} catch (retryErr) {
+				throw retryErr instanceof ResolveError && retryErr.code !== err.code ? retryErr : err;
+			}
 		}
 	}, []);
 
@@ -298,7 +312,28 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 					} else {
 						setBusy('Retrieving the video');
 						caption = outcome.source.caption;
-						file = await fetchWithOneRetry(outcome.source, payload.link);
+						try {
+							file = await fetchWithOneRetry(outcome.source, payload.link);
+						} catch (err) {
+							// The video is gone, but the resolver already handed us the
+							// post caption — and on a recipe post that is very often the
+							// entire recipe in text. Dead-ending here while holding the
+							// answer is the worst outcome available.
+							//
+							// Only fall back when the caption is substantial: a
+							// three-word caption produces a worse recipe than an honest
+							// error, and pretending otherwise wastes a model call.
+							const usable = caption?.trim() ?? '';
+							if (usable.length < THIN_EVIDENCE_CHARS) throw err;
+
+							transcript = usable;
+							caption = undefined; // now the primary source, not corroboration
+							setNotice(
+								`${errText(err)} Built this from the post caption instead — it is often the ` +
+									'full recipe, but nothing spoken or shown only on screen made it in. ' +
+									'For the complete version, save the video and drop it in below.',
+							);
+						}
 					}
 				}
 
