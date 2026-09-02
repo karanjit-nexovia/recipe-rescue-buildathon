@@ -320,9 +320,28 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 						// A caption or title — usable, but nothing was watched or
 						// heard. Say so rather than letting it pass as a full read.
 						transcript = outcome.text;
+
+						// Below the evidence bar there is no recipe in here to find.
+						// A YouTube title is about thirty characters, and running
+						// extraction on it costs a model call and half a minute to
+						// arrive at a page that says nothing could be read — after
+						// asserting a cuisine, a serving count and a total time that
+						// came from nowhere. Stop at the ingest screen instead, where
+						// the two things that DO work are one action away.
+						if (transcript.trim().length < THIN_EVIDENCE_CHARS) {
+							throw new ResolveError(
+								'no-media',
+								outcome.source.platform === 'youtube'
+									? 'YouTube only hands over the video title — “' +
+											transcript.trim() +
+											'” — and never the description, which is where the recipe is. Open the video, copy the description into the box below, or save the video and drop it in.'
+									: 'That link only gave a few words, not enough to build a recipe from. Paste the caption into the box below, or drop the video in.',
+							);
+						}
+
 						if (outcome.thin) {
 							setNotice(
-								'That link only gave a short title, not a recipe. Expect a rough result — ' +
+								'That link gave only a short caption, not a full recipe. Expect a rough result — ' +
 									'pasting the full caption or dropping the video in gives a much better one.',
 							);
 						}
