@@ -49,6 +49,12 @@ export const MAX_VIDEO_BYTES = 200 * 1024 * 1024;
  *  the user can act on rather than a spinner that never resolves. */
 const TRANSCRIBE_TIMEOUT_MS = 5 * 60 * 1000;
 const ASK_TIMEOUT_MS = 2 * 60 * 1000;
+/**
+ * Starting a task is orchestration, not work — it should take seconds. A start
+ * that has not returned in ninety of them is not slow, it is stuck, and every
+ * later ceiling is unreachable until this one fires.
+ */
+const USE_TIMEOUT_MS = 90 * 1000;
 
 /**
  * Reject if `work` outruns `ms`.
@@ -127,14 +133,25 @@ export function usePipelines() {
 			const cached = tokens.current[name];
 			if (cached) return cached;
 
-			const started = client
-				.use({ pipeline: PIPELINES[name], useExisting: true, ttl: TASK_TTL })
-				.then((res: { token: string }) => res.token)
-				.catch((err: unknown) => {
-					// Never cache a failed start — the next attempt should retry.
-					delete tokens.current[name];
-					throw err;
-				});
+			// The ceiling belongs HERE, not only on the request that follows.
+			// use() starts a server-side task and has no timeout of its own, so
+			// without this a hung start is unbounded: the caller sits at
+			// "Reading the speech and on-screen text" past every other limit in
+			// this file, and the spinner never resolves. That is precisely the
+			// failure the timeouts exist to prevent.
+			const started = withTimeout(
+				client
+					.use({ pipeline: PIPELINES[name], useExisting: true, ttl: TASK_TTL })
+					.then((res: { token: string }) => res.token),
+				USE_TIMEOUT_MS,
+				'Starting the pipeline',
+			).catch((err: unknown) => {
+				// Never cache a failed start — the next attempt should retry.
+				// This covers the timeout too, so a slow start does not poison
+				// the cache with a promise that already rejected.
+				delete tokens.current[name];
+				throw err;
+			});
 
 			tokens.current[name] = started;
 			return started;

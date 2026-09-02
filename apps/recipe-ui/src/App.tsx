@@ -173,6 +173,23 @@ const errText = (err: unknown): string => {
 	return msg || 'Something went wrong.';
 };
 
+/** Past this, a run is slower than any measured reel and worth flagging. */
+const SLOW_SECONDS = 240;
+
+/**
+ * What to say while the user waits.
+ *
+ * "It has not stalled" is a claim about the run, so it may only be made while
+ * the run is still inside the range a healthy one occupies. Past the point
+ * where every stage should have finished or timed out, saying it anyway is
+ * telling the user something we do not know to be true.
+ */
+const waitText = (elapsed: number): string => {
+	if (elapsed <= 25) return '…';
+	if (elapsed <= SLOW_SECONDS) return '. Reading a reel properly takes a while; it has not stalled.';
+	return '. This is longer than a reel normally takes. It will stop on its own if nothing comes back — or start again with the caption box, which is quick.';
+};
+
 const summarise = (r: Recipe, extra?: string): string =>
 	[r.cuisine, r.servings ? `serves ${r.servings}` : null, r.totalMinutes ? `${r.totalMinutes} min` : null, extra]
 		.filter(Boolean)
@@ -471,9 +488,8 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 					{error && <Banner variant="error">{error}</Banner>}
 					{notice && !busy && <Banner variant="warning">{notice}</Banner>}
 					{busy && (
-						<Banner variant="info">
-							{busy} — {elapsed}s
-							{elapsed > 25 ? '. Reading a reel properly takes a while; it has not stalled.' : '…'}
+						<Banner variant={elapsed > SLOW_SECONDS ? 'warning' : 'info'}>
+							{busy} — {elapsed}s{waitText(elapsed)}
 						</Banner>
 					)}
 
