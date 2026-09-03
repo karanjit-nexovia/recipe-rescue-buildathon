@@ -449,6 +449,25 @@ export function buildSubstitutionQuestion(
 				'note can stand in — status substitute with useInstead — or whether it genuinely ' +
 				'cannot, which is status missing.',
 		);
+		q.addInstruction(
+			'Having something says nothing about how much of it they own',
+			'HAVE means the ingredient is in their kitchen, full stop. It is not a measurement and ' +
+				'it is not a ration. Never plan around a shortage of something they told you they ' +
+				'have: "use half of your one teaspoon of salt in the dough and save the rest for ' +
+				'the filling" invents a scarcity nobody reported, out of a number that was the ' +
+				'recipe\'s requirement and never their stock. If they have salt, they have salt.',
+		);
+
+		q.addInstruction(
+			'Some things are never genuinely missing',
+			'Water is not an ingredient anybody lacks, and a kitchen with no water cannot cook at ' +
+				'all. If water appears in MISSING it is a mis-tick rather than a fact: say so in ' +
+				'tradeoff, tell them to tick it back on, and do NOT invent a way around it. ' +
+				'Kneading dough with yogurt because someone has no water is a worse answer than ' +
+				'pointing out that they have a tap. Treat salt the same way unless they have said ' +
+				'outright that they ran out.',
+		);
+
 		if (have.length) q.addContext(`HAVE (confirmed present):\n${have.join('\n')}`);
 		if (lacking.length) q.addContext(`MISSING (confirmed absent):\n${lacking.join('\n')}`);
 	}

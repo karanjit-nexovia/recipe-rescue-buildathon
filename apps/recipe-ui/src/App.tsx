@@ -614,6 +614,16 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 	);
 	const [scale, setScale] = useState(1);
 	const [doneIng, setDoneIng] = useState<number[]>([]);
+	/**
+	 * What was ticked when the fridge check ran.
+	 *
+	 * The check is a snapshot. Tick something off in the shop and its answer is
+	 * out of date the moment you do — it will still be telling you to knead the
+	 * dough with yogurt because you have no water, ten seconds after you bought
+	 * water. Knowing what it was computed against lets the screen drop the parts
+	 * that no longer apply instead of making you spend another 79 seconds.
+	 */
+	const [checkedAgainst, setCheckedAgainst] = useState<number[] | null>(null);
 	const [doneStep, setDoneStep] = useState<number[]>([]);
 
 	// Progress belongs to the recipe, not the session: reopening the one you
@@ -649,6 +659,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			);
 			setDoneStep([]);
 		}
+		setCheckedAgainst(null);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [recipeKey]);
 
@@ -956,7 +967,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 		try {
 			const all = recipe.ingredients ?? [];
 			const named = (list: Ingredient[]) =>
-				list.map((i) => [i.item, i.quantity].filter(Boolean).join(' — ')).filter(Boolean);
+				list.map((i) => (i.item ?? '').trim()).filter(Boolean);
 			const answer = await checkFridge(
 					recipe,
 					fridge,
@@ -964,6 +975,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 				named(all.filter((_, i) => !doneIng.includes(i))),
 			);
 			setSub(answer);
+			setCheckedAgainst(doneIng);
 			setView('verdict');
 		} catch (err) {
 			setError(errText(err));
@@ -1209,6 +1221,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 								onToggleStep={toggleStep}
 								scale={scale}
 								onScale={setScale}
+								checkedAgainst={checkedAgainst}
 								onSave={saveRecipe}
 								isSaved={!!savedId}
 								canSave={loaded}
@@ -1235,6 +1248,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 							onToggleStep={toggleStep}
 							scale={scale}
 							onScale={setScale}
+							checkedAgainst={checkedAgainst}
 								onSave={saveRecipe}
 								isSaved={alreadySaved}
 								canSave={loaded}
@@ -1667,6 +1681,7 @@ interface RecipeViewProps {
 	onToggleStep: (i: number) => void;
 	scale: number;
 	onScale: (factor: number) => void;
+	checkedAgainst: number[] | null;
 	/** 'verdict' shows only the can-I-make-this answer; 'recipe' shows the dish. */
 	stage?: 'verdict' | 'recipe';
 	onContinue?: () => void;
@@ -1686,6 +1701,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 	onToggleStep,
 	scale,
 	onScale,
+	checkedAgainst,
 	stage = 'recipe',
 	onContinue,
 	onSave,
@@ -1706,6 +1722,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 	/** Written for the ingredients on hand, as opposed to from a dish they named. */
 	const fromKitchen = recipe.origin === 'kitchen';
 
+
 	const grouped = useMemo(() => groupIngredients(ingredients), [ingredients]);
 
 	// A tick means "I have this". Everything unticked is what you would have to
@@ -1715,6 +1732,21 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 	const lacking = useMemo(
 		() => ingredients.filter((_, i) => !doneIng.includes(i)),
 		[ingredients, doneIng],
+	);
+	// The check answered a question about a kitchen that has since changed.
+	const stale =
+		!!checkedAgainst &&
+		(checkedAgainst.length !== doneIng.length ||
+			checkedAgainst.some((i) => !doneIng.includes(i)));
+
+	// Only the swaps that still matter. Buying the water retires the line
+	// telling you to use yogurt instead of it, without asking a model again.
+	const liveLines = useMemo(
+		() =>
+			(sub?.lines ?? []).filter(
+				(ln) => ln.status !== 'have' && lacking.some((ing) => sameIngredient(ln.item, ing.item)),
+			),
+		[sub, lacking],
 	);
 
 	// Cuisine, servings and time were 12.5px muted text — the smallest thing on
