@@ -170,8 +170,7 @@ const CSS = `
 /* The whole point of the redesign: what I need, beside what I do. */
 .rx-split { display: grid; grid-template-columns: 1fr; gap: 30px; }
 @media (min-width: 880px) {
-  .rx-split { grid-template-columns: minmax(230px, 300px) 1fr; gap: 44px; align-items: start; }
-  .rx-aside { position: sticky; top: 8px; }
+  .rx-split { grid-template-columns: minmax(260px, 330px) 1fr; gap: 44px; align-items: start; }
 }
 
 .rx-label {
@@ -239,7 +238,8 @@ const CSS = `
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
 .is-done .rx-box { background: var(--rr-accent, #6b8afd); border-color: var(--rr-accent, #6b8afd); color: #fff; animation: rx-pop 260ms ease; }
-.rx-ing.is-done .rx-ing-qty, .rx-ing.is-done .rx-ing-name { opacity: 0.42; text-decoration: line-through; }
+.rx-ing.is-done .rx-ing-name { color: var(--rr-text-secondary); }
+.rx-ing.is-done .rx-ing-qty { opacity: 0.75; }
 .rx-step.is-done { opacity: 0.45; }
 .rx-step.is-done .rx-step-text { text-decoration: line-through; }
 
@@ -247,6 +247,15 @@ const CSS = `
 .rx-bar { flex: 1; height: 4px; border-radius: 3px; background: var(--rr-bg-hover, rgba(128,128,128,0.18)); overflow: hidden; }
 .rx-bar-fill { height: 100%; background: var(--rr-accent, #6b8afd); border-radius: 3px; transition: width 340ms cubic-bezier(0.2,0.7,0.3,1); }
 .rx-count { font-size: 12px; color: var(--rr-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* The availability check belongs beside the ingredients it asks about, not
+   below thirteen steps. It also fills the column the sticky aside used to
+   leave empty. */
+.rx-panel {
+  margin-top: 26px; padding-top: 20px;
+  border-top: 1px solid var(--rr-border-subtle, rgba(128,128,128,0.13));
+}
+.rx-panel textarea { font-size: 13px; }
 
 /* --- serving scaler ------------------------------------------------------ */
 .rx-scale { display: inline-flex; border: 1px solid var(--rr-border, rgba(128,128,128,0.35)); border-radius: 999px; overflow: hidden; }
@@ -1384,54 +1393,8 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 						) : (
 							<p style={s.muted}>Nothing could be read from this one.</p>
 						)}
-					</aside>
-
-					<section className="rx-in rx-in-3">
-						<div className="rx-label">Method</div>
-
-						{!!recipe.steps?.length && (
-							<div className="rx-progress">
-								<div className="rx-bar">
-									<div
-										className="rx-bar-fill"
-										style={{ width: `${(doneStep.length / recipe.steps.length) * 100}%` }}
-									/>
-								</div>
-								<span className="rx-count">
-									{doneStep.length}/{recipe.steps.length} done
-								</span>
-							</div>
-						)}
-
-						{recipe.steps?.length ? (
-							recipe.steps.map((st, i) => (
-								<StepRow
-									key={i}
-									step={st}
-									index={i}
-									done={doneStep.includes(i)}
-									onToggle={() => onToggleStep(i)}
-								/>
-							))
-						) : (
-							<p style={s.muted}>No steps could be read from this one.</p>
-						)}
-
-						{!!recipe.missingInfo?.length && (
-							<div className="rx-caveats">
-								<div className="rx-label">{written ? 'Worth knowing' : 'The reel never said'}</div>
-								<ul>
-									{recipe.missingInfo.map((m, i) => (
-										<li key={i}>{m}</li>
-									))}
-								</ul>
-							</div>
-						)}
-					</section>
-				</div>
-			</Card>
-
-			<Card header="Can you make this tonight?">
+						<div className="rx-panel">
+							<div className="rx-label">Can you make this tonight?</div>
 				<p style={{ ...s.muted, marginTop: 0 }}>
 					{haveCount === 0
 						? 'Tick the ingredients you already have in the list above, then check here.'
@@ -1547,6 +1510,52 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 						)}
 					</div>
 				)}
+						</div>
+					</aside>
+
+					<section className="rx-in rx-in-3">
+						<div className="rx-label">Method</div>
+
+						{!!recipe.steps?.length && (
+							<div className="rx-progress">
+								<div className="rx-bar">
+									<div
+										className="rx-bar-fill"
+										style={{ width: `${(doneStep.length / recipe.steps.length) * 100}%` }}
+									/>
+								</div>
+								<span className="rx-count">
+									{doneStep.length}/{recipe.steps.length} done
+								</span>
+							</div>
+						)}
+
+						{recipe.steps?.length ? (
+							recipe.steps.map((st, i) => (
+								<StepRow
+									key={i}
+									step={st}
+									index={i}
+									done={doneStep.includes(i)}
+									onToggle={() => onToggleStep(i)}
+								/>
+							))
+						) : (
+							<p style={s.muted}>No steps could be read from this one.</p>
+						)}
+
+						{!!recipe.missingInfo?.length && (
+							<div className="rx-caveats">
+								<div className="rx-label">{written ? 'Worth knowing' : 'The reel never said'}</div>
+								<ul>
+									{recipe.missingInfo.map((m, i) => (
+										<li key={i}>{m}</li>
+									))}
+								</ul>
+							</div>
+						)}
+					</section>
+				</div>
 			</Card>
 		</div>
 	);
