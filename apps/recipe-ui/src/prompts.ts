@@ -21,6 +21,8 @@ const RECIPE_EXAMPLE = {
 		{ item: 'Potatoes', quantity: '3 medium (about 400g)', inferred: false, note: 'diced small so they cook through' },
 		{ item: 'Salt', quantity: '3/4 tsp', inferred: true, note: 'the cook said "to taste" — start here' },
 	],
+	// One component, so no group is set. A dish with a filling and a sauce would
+	// carry group: 'For the filling' / 'For the sauce' on each line.
 	steps: [
 		{
 			n: 1,
@@ -163,6 +165,19 @@ export function buildExtractionQuestion(
 			'reconstructing a typical version of the dish from its name and a few visible cues. ' +
 			'If the transcript is empty, unintelligible or not about cooking, return steps as an ' +
 			'empty array and say so in missingInfo. Never invent a recipe from nothing.',
+	);
+
+	q.addInstruction(
+		'Group ingredients by the part of the dish they belong to',
+		'When a dish has distinct components — a filling and a sauce, a marinade and a salad — ' +
+			'set group on every ingredient to the component it belongs to, phrased as the cook ' +
+			'would say it: "For the kefta", "For the salad", "For the roasted garlic sauce". ' +
+			'This matters most where the same ingredient appears more than once: garlic in the ' +
+			'filling and again in the sauce is two lines with two amounts, and without a group ' +
+			'the reader cannot tell which spoonful goes where. Keep an ingredient in exactly one ' +
+			'group, ordered so the groups follow the order they are first used in the method. ' +
+			'If the dish is a single simple thing, leave group off every ingredient rather than ' +
+			'inventing one — a lone group heading over the whole list helps nobody.',
 	);
 
 	q.addInstruction(

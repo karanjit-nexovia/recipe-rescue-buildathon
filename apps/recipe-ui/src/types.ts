@@ -7,6 +7,16 @@
 export interface Ingredient {
 	item?: string;
 	quantity?: string;
+	/**
+	 * Which component of the dish this belongs to — "For the kefta", "For the
+	 * sauce". Absent on simple dishes that have only one component.
+	 *
+	 * Real recipes reuse an ingredient across components: garlic in the filling
+	 * and again in the sauce, oil three times at three different amounts. Listed
+	 * flat that reads as duplication, and a beginner cannot tell which spoonful
+	 * belongs to which step. Grouped, it reads as the recipe it is.
+	 */
+	group?: string;
 	/** True when the model inferred the amount from context rather than the
 	 *  cook stating it. Shown differently so the user knows what to trust. */
 	inferred?: boolean;

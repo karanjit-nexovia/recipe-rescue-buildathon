@@ -35,7 +35,7 @@ import {
 	verifiedProviders,
 } from './mediaSource';
 import type { MediaSource } from './mediaSource';
-import type { Recipe, SavedRecipe, Step, SubLine, Substitution } from './types';
+import type { Ingredient, Recipe, SavedRecipe, Step, SubLine, Substitution } from './types';
 
 // =============================================================================
 // CONSTANTS
@@ -72,14 +72,6 @@ const s: Record<string, React.CSSProperties> = {
 	muted: { fontSize: 13, color: 'var(--rr-text-secondary)', lineHeight: 1.55 },
 	meta: { fontSize: 12.5, color: 'var(--rr-text-secondary)', letterSpacing: 0.2 },
 
-	sectionTitle: {
-		fontSize: 11,
-		fontWeight: 700,
-		letterSpacing: 1,
-		textTransform: 'uppercase',
-		color: 'var(--rr-text-secondary)',
-		margin: '26px 0 10px',
-	},
 
 	textarea: {
 		width: '100%',
@@ -117,20 +109,6 @@ const s: Record<string, React.CSSProperties> = {
 	ingNote: { gridColumn: '1 / -1', fontSize: 12.5, color: 'var(--rr-text-secondary)', lineHeight: 1.5 },
 
 	// --- steps -------------------------------------------------------------
-	stepRow: { display: 'grid', gridTemplateColumns: '30px 1fr', gap: 14, padding: '16px 0', borderBottom: '1px solid var(--rr-border-subtle, rgba(128,128,128,0.18))' },
-	stepNum: {
-		width: 26,
-		height: 26,
-		borderRadius: '50%',
-		display: 'flex',
-		alignItems: 'center',
-		justifyContent: 'center',
-		fontSize: 12,
-		fontWeight: 700,
-		background: 'var(--rr-bg-hover, rgba(128,128,128,0.14))',
-		color: 'var(--rr-text-secondary)',
-	},
-	stepText: { fontSize: 14, lineHeight: 1.6 },
 	doneWhen: {
 		marginTop: 8,
 		padding: '8px 11px',
@@ -140,7 +118,6 @@ const s: Record<string, React.CSSProperties> = {
 		fontSize: 12.5,
 		lineHeight: 1.55,
 	},
-	timeChip: { fontSize: 12, fontVariantNumeric: 'tabular-nums', color: 'var(--rr-text-secondary)', whiteSpace: 'nowrap' },
 
 	// --- cook mode ---------------------------------------------------------
 	cookStep: { fontSize: 19, lineHeight: 1.55, marginTop: 0, marginBottom: 4 },
@@ -150,8 +127,99 @@ const s: Record<string, React.CSSProperties> = {
 };
 
 // =============================================================================
+// STYLESHEET
+//
+// Inline style objects cannot express a media query, and the recipe screen
+// needs one: on a laptop the ingredients belong beside the method, held in
+// place while the steps scroll, and on a phone they belong above it. Everything
+// here is scoped under .rx- and themed from the shell's own CSS variables, so
+// it follows light and dark without knowing which is active.
+// =============================================================================
+
+const CSS = `
+.rx-head { margin-bottom: 22px; }
+.rx-title { font-size: 27px; line-height: 1.18; font-weight: 650; letter-spacing: -0.4px; margin: 0 0 12px; }
+.rx-chips { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
+.rx-chip {
+  font-size: 12.5px; padding: 4px 11px; border-radius: 999px;
+  background: var(--rr-bg-hover, rgba(128,128,128,0.12));
+  color: var(--rr-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* The whole point of the redesign: what I need, beside what I do. */
+.rx-split { display: grid; grid-template-columns: 1fr; gap: 30px; }
+@media (min-width: 880px) {
+  .rx-split { grid-template-columns: minmax(230px, 300px) 1fr; gap: 44px; align-items: start; }
+  .rx-aside { position: sticky; top: 8px; }
+}
+
+.rx-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
+  color: var(--rr-text-secondary); margin: 0 0 14px;
+}
+
+.rx-group { margin: 0 0 20px; }
+.rx-group:last-child { margin-bottom: 0; }
+.rx-group-name { font-size: 12.5px; font-weight: 650; margin: 0 0 7px; }
+.rx-ing {
+  display: grid; grid-template-columns: 1fr auto; gap: 2px 14px; padding: 7px 0;
+  border-bottom: 1px solid var(--rr-border-subtle, rgba(128,128,128,0.13));
+}
+.rx-ing:last-child { border-bottom: 0; }
+.rx-ing-name { font-size: 13.5px; line-height: 1.45; }
+.rx-ing-qty {
+  font-size: 13px; text-align: right; color: var(--rr-text-secondary);
+  font-variant-numeric: tabular-nums; max-width: 160px;
+}
+/* A word, not a badge. Thirty badges down a list is thirty things shouting. */
+.rx-est { font-size: 10.5px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--rr-text-secondary); opacity: 0.7; margin-left: 7px; }
+.rx-ing-note { grid-column: 1 / -1; font-size: 12px; color: var(--rr-text-secondary); line-height: 1.45; margin-top: 2px; }
+
+.rx-step {
+  display: grid; grid-template-columns: 26px 1fr; gap: 16px; padding: 19px 0;
+  border-bottom: 1px solid var(--rr-border-subtle, rgba(128,128,128,0.13));
+}
+.rx-step:first-of-type { padding-top: 0; }
+.rx-step:last-child { border-bottom: 0; }
+.rx-step-n { font-size: 13px; font-weight: 700; color: var(--rr-text-secondary); font-variant-numeric: tabular-nums; padding-top: 3px; }
+/* Read from across a counter, often with one hand and wet fingers. */
+.rx-step-text { font-size: 15.5px; line-height: 1.62; }
+.rx-step-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.rx-step-time { font-size: 12px; color: var(--rr-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 3px; }
+/* Was a bordered, filled callout on every step. Thirteen of those down a page
+   is thirteen alarms; the cue is supporting text, so it now reads as such. */
+.rx-cue { margin-top: 7px; font-size: 13px; line-height: 1.5; color: var(--rr-text-secondary); }
+.rx-cue b { font-weight: 600; color: var(--rr-text-primary); }
+
+.rx-caveats { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--rr-border-subtle, rgba(128,128,128,0.13)); }
+.rx-caveats ul { margin: 0; padding-left: 17px; }
+.rx-caveats li { font-size: 12.5px; line-height: 1.55; color: var(--rr-text-secondary); margin-bottom: 6px; }
+`;
+
+// =============================================================================
 // HELPERS
 // =============================================================================
+
+/**
+ * Ingredients in the order the model gave them, split wherever the component
+ * changes. Order is never rearranged: the model is told to list groups in the
+ * order they are first used, and re-sorting here would undo that.
+ *
+ * A single unnamed run means a simple dish — no headings. A single NAMED run
+ * means the model grouped when it should not have, and one heading over the
+ * whole list tells the reader nothing, so it is dropped.
+ */
+const groupIngredients = (list: Ingredient[]): Array<{ name?: string; items: Ingredient[] }> => {
+	const out: Array<{ name?: string; items: Ingredient[] }> = [];
+	for (const ing of list) {
+		const name = ing.group?.trim() || undefined;
+		const last = out[out.length - 1];
+		if (last && last.name === name) last.items.push(ing);
+		else out.push({ name, items: [ing] });
+	}
+	if (out.length === 1) out[0].name = undefined;
+	return out;
+};
 
 const mmss = (secs: number): string => {
 	const safe = Math.max(0, Math.round(secs));
@@ -821,6 +889,27 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 	// reel-shaped copy below would contradict the recipe's own first caveat.
 	const written = recipe.origin === 'kitchen';
 
+	const grouped = useMemo(() => groupIngredients(ingredients), [ingredients]);
+
+	// Cuisine, servings and time were 12.5px muted text — the smallest thing on
+	// screen, holding the only two numbers anyone plans an evening around.
+	const chips = [
+		recipe.cuisine,
+		recipe.servings ? `Serves ${recipe.servings}` : null,
+		recipe.totalMinutes ? `${recipe.totalMinutes} min` : null,
+	].filter(Boolean) as string[];
+
+	// One banner, chosen, rather than however many happen to be true at once.
+	const estimateNote = mostlyEstimated
+		? written
+			? 'Nobody cooked this on camera, so every quantity is a sensible starting point rather than a cook’s recipe. Taste as you go.'
+			: 'The cook never gave amounts, so every quantity is a sensible starting point rather than theirs. Taste as you go.'
+		: recipe.confidence === 'low'
+			? written
+				? 'Written for your ingredients rather than read from a video, so the amounts are estimates. Taste as you go.'
+				: 'The reel was vague in places, so parts of this are inferred. Taste as you go.'
+			: null;
+
 	// Shopping is derived from data already on screen, so it needs no request
 	// and no spinner — the panel is just hidden until asked for.
 	const [shopping, setShopping] = useState(false);
@@ -862,62 +951,70 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 					</div>
 				}
 			>
-				<div style={{ ...s.meta, marginBottom: 12 }}>
-					{summarise(recipe) ||
-						(written ? 'Written for what you have' : 'The reel did not say how many it serves')}
+				<div className="rx-head">
+					<div className="rx-chips">
+						{chips.length ? (
+							chips.map((c, i) => (
+								<span key={i} className="rx-chip">
+									{c}
+								</span>
+							))
+						) : (
+							<span className="rx-chip">
+								{written ? 'Written for what you have' : 'No serving size given'}
+							</span>
+						)}
+					</div>
 				</div>
 
-				{mostlyEstimated ? (
-					<Banner variant="warning">
-						{written
-							? 'Nobody cooked this on camera, so every quantity below is a sensible starting point rather than a cook’s recipe. Taste as you go.'
-							: 'The cook never gave amounts, so every quantity below is a sensible starting point rather than their recipe. Taste as you go.'}
-					</Banner>
-				) : recipe.confidence === 'low' ? (
-					<Banner variant="warning">
-						{written
-							? 'This was written for your ingredients rather than read from a video, so the amounts are estimates. Taste as you go.'
-							: 'The reel was vague in places, so parts of this are inferred. Taste as you go.'}
-					</Banner>
-				) : null}
+				{/* At most one. The old screen could stack five coloured blocks
+				    before a single word of the recipe. */}
+				{estimateNote && <Banner variant="warning">{estimateNote}</Banner>}
 
-				<div style={s.sectionTitle}>Ingredients</div>
-				{ingredients.length ? (
-					ingredients.map((ing, i) => (
-						<div key={i} style={s.ingRow}>
-							<div style={s.ingName}>
-								<span>{ing.item ?? '—'}</span>
-								{ing.inferred && !mostlyEstimated && (
-									<StatusBadge variant="warning">estimated</StatusBadge>
-								)}
+				<div className="rx-split">
+					<aside className="rx-aside">
+						<div className="rx-label">Ingredients</div>
+						{ingredients.length ? (
+							grouped.map((g, gi) => (
+								<div className="rx-group" key={gi}>
+									{g.name && <div className="rx-group-name">{g.name}</div>}
+									{g.items.map((ing, i) => (
+										<div className="rx-ing" key={i}>
+											<div className="rx-ing-name">
+												{ing.item ?? '—'}
+												{ing.inferred && !mostlyEstimated && <span className="rx-est">est</span>}
+											</div>
+											<div className="rx-ing-qty">{ing.quantity ?? '—'}</div>
+											{ing.note && <div className="rx-ing-note">{ing.note}</div>}
+										</div>
+									))}
+								</div>
+							))
+						) : (
+							<p style={s.muted}>Nothing could be read from this one.</p>
+						)}
+					</aside>
+
+					<section>
+						<div className="rx-label">Method</div>
+						{recipe.steps?.length ? (
+							recipe.steps.map((st, i) => <StepRow key={i} step={st} index={i} />)
+						) : (
+							<p style={s.muted}>No steps could be read from this one.</p>
+						)}
+
+						{!!recipe.missingInfo?.length && (
+							<div className="rx-caveats">
+								<div className="rx-label">{written ? 'Worth knowing' : 'The reel never said'}</div>
+								<ul>
+									{recipe.missingInfo.map((m, i) => (
+										<li key={i}>{m}</li>
+									))}
+								</ul>
 							</div>
-							<div style={s.ingQty}>{ing.quantity ?? '—'}</div>
-							{ing.note && <div style={s.ingNote}>{ing.note}</div>}
-						</div>
-					))
-				) : (
-					<p style={s.muted}>No ingredients could be read from this reel.</p>
-				)}
-
-				<div style={s.sectionTitle}>Method</div>
-				{recipe.steps?.length ? (
-					recipe.steps.map((st, i) => <StepRow key={i} step={st} index={i} />)
-				) : (
-					<p style={s.muted}>No steps could be read from this reel.</p>
-				)}
-
-				{!!recipe.missingInfo?.length && (
-					<>
-						<div style={s.sectionTitle}>{written ? 'Worth knowing' : 'The reel never said'}</div>
-						<ul style={{ ...s.muted, margin: 0, paddingLeft: 18 }}>
-							{recipe.missingInfo.map((m, i) => (
-								<li key={i} style={{ marginBottom: 5 }}>
-									{m}
-								</li>
-							))}
-						</ul>
-					</>
-				)}
+						)}
+					</section>
+				</div>
 			</Card>
 
 			<Card header="Cook it with what you have">
@@ -1024,17 +1121,16 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 };
 
 const StepRow: React.FC<{ step: Step; index: number }> = ({ step, index }) => (
-	<div style={s.stepRow}>
-		<div style={s.stepNum}>{step.n ?? index + 1}</div>
+	<div className="rx-step">
+		<div className="rx-step-n">{step.n ?? index + 1}</div>
 		<div>
-			<div style={{ ...s.row, justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-				<div style={{ ...s.stepText, flex: 1 }}>{step.instruction ?? ''}</div>
-				{!!step.minutes && <div style={s.timeChip}>{step.minutes} min</div>}
+			<div className="rx-step-top">
+				<div className="rx-step-text">{step.instruction ?? ''}</div>
+				{!!step.minutes && <div className="rx-step-time">{step.minutes} min</div>}
 			</div>
 			{step.doneWhen && (
-				<div style={s.doneWhen}>
-					<strong>Ready when: </strong>
-					{step.doneWhen}
+				<div className="rx-cue">
+					<b>Ready when</b> {step.doneWhen}
 				</div>
 			)}
 		</div>
@@ -1206,6 +1302,9 @@ const BookView: React.FC<{
 
 const App: React.FC<ShellAppProps> = (props) => (
 	<AppLayout>
+		{/* Mounted with the app rather than injected into document.head, so it
+		    leaves with the app instead of outliving it in the shell. */}
+		<style>{CSS}</style>
 		<Content {...props} />
 	</AppLayout>
 );
