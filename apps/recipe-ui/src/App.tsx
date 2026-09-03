@@ -877,16 +877,30 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 	 * one. savedId clears too — this is a new recipe, not an edit of a saved one.
 	 */
 	const runCookAlternative = useCallback(async () => {
-		const dish = sub?.alternative?.trim();
-		if (!dish || !fridge.trim() || inFlight.current) return;
+		// The ticked ingredients ARE a pantry, and usually a better one than the
+		// optional box: nine confirmed items beat a sentence nobody bothered to
+		// write. Both go in.
+		const ticked = (recipe?.ingredients ?? [])
+			.filter((_, i) => doneIng.includes(i))
+			.map((ing) => [ing.item, ing.quantity].filter(Boolean).join(' — '))
+			.filter(Boolean);
+		const pantry = [ticked.join('\n'), fridge.trim()].filter(Boolean).join('\n');
+
+		// A suggestion when the fridge check made one; otherwise the prompt picks
+		// a dish itself. Either way this is answerable — which is why the button
+		// no longer waits on the model having volunteered an alternative.
+		const dish = sub?.alternative?.trim() ?? '';
+		if (!pantry || inFlight.current) return;
 		inFlight.current = true;
 		setError(null);
 		setNotice(null);
-		setBusy('Writing that recipe for what you have');
+		setBusy(dish ? 'Writing that recipe for what you have' : 'Finding something you can make tonight');
 		try {
-			const parsed = await cookAlternative(dish, fridge);
+			const parsed = await cookAlternative(dish, pantry);
 			if (!parsed.ingredients?.length && !parsed.steps?.length) {
-				throw new Error('That suggestion could not be turned into a recipe. Try describing what you have in a bit more detail.');
+					throw new Error(
+					'Nothing could be built from that. Tick a few more ingredients, or add what else is in your kitchen.',
+				);
 			}
 			setRecipe({ ...parsed, origin: 'kitchen' });
 			setSub(null);
@@ -902,7 +916,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			inFlight.current = false;
 			setBusy(null);
 		}
-	}, [cookAlternative, fridge, sub]);
+	}, [cookAlternative, doneIng, fridge, recipe, sub]);
 
 	// ----------------------------------------------------------- recipe book
 
@@ -1435,27 +1449,27 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 						</div>
 					{(missing.length > 0 || sub.alternative) && (
 							<div style={{ marginTop: 18 }}>
+								{/* Count what is actually rendered. The old copy said "Two ways
+								    forward" whenever anything was missing, but the second button
+								    was gated on the model having volunteered an alternative — so
+								    a cookable dish printed a promise of two and showed one. */}
 								<div style={{ ...s.muted, marginBottom: 10 }}>
 									{missing.length > 0
 										? `You are missing ${missing.length} thing${missing.length > 1 ? 's' : ''}. Two ways forward:`
-										: 'Two ways forward:'}
+										: 'Or, if you would rather not:'}
 								</div>
 
 								<div style={s.row}>
 									{missing.length > 0 && (
-										<Button
-											small
-											variant={sub.alternative ? 'secondary' : undefined}
-											onClick={() => setShopping((v) => !v)}
-										>
+										<Button small variant="secondary" onClick={() => setShopping((v) => !v)}>
 											{shopping ? 'Hide the shopping list' : 'Get it today — shopping list'}
 										</Button>
 									)}
-									{sub.alternative && (
-										<Button small disabled={busy} onClick={onCookAlternative}>
-											Cook something else tonight
-										</Button>
-									)}
+									{/* Always offered. The ticked ingredients are a pantry, so this
+									    is answerable whether or not a suggestion came back. */}
+									<Button small disabled={busy} onClick={onCookAlternative}>
+										{sub.alternative ? 'Cook something else tonight' : 'Cook something else with these'}
+									</Button>
 								</div>
 
 								{sub.alternative && (

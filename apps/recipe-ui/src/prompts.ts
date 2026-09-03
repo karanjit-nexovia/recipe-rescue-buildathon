@@ -268,8 +268,15 @@ export function buildAlternativeRecipeQuestion(
 	});
 
 	q.addQuestion(
-		'Write a structured recipe for the dish described below, for someone cooking it tonight ' +
-			'with only the ingredients listed in their kitchen.',
+		dish.trim()
+			? 'Write a structured recipe for the dish described below, for someone cooking it ' +
+					'tonight with only the ingredients listed in their kitchen.'
+			: // No suggestion was made, because the original dish turned out to be
+				// cookable. They asked for something else anyway, so pick it.
+				'Choose one simple dish this person can cook tonight from the ingredients listed ' +
+					'in their kitchen, and write it out in full. Pick something that genuinely uses ' +
+					'what they have rather than the one thing they are closest to being unable to ' +
+					'make, and name it in the title.',
 	);
 
 	q.addInstruction(
@@ -300,7 +307,7 @@ export function buildAlternativeRecipeQuestion(
 	);
 
 	q.addExample('A reel about jeera aloo', RECIPE_EXAMPLE);
-	q.addContext(`THE DISH TO WRITE:\n${dish.trim()}`);
+	if (dish.trim()) q.addContext(`THE DISH TO WRITE:\n${dish.trim()}`);
 	q.addContext(`WHAT IS IN MY KITCHEN:\n${fridge.trim()}`);
 
 	return q;
