@@ -507,7 +507,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			if (!parsed.ingredients?.length && !parsed.steps?.length) {
 				throw new Error('That suggestion could not be turned into a recipe. Try describing what you have in a bit more detail.');
 			}
-			setRecipe(parsed);
+			setRecipe({ ...parsed, origin: 'kitchen' });
 			setSub(null);
 			setSavedId(null);
 			setNotice(
@@ -751,6 +751,9 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 	// When nearly everything is an estimate the per-row badge stops carrying
 	// information, so say it once and drop the badges.
 	const mostlyEstimated = ingredients.length > 0 && estimatedCount / ingredients.length >= MOSTLY_ESTIMATED;
+	// A recipe written for someone's ingredients has no reel behind it, so the
+	// reel-shaped copy below would contradict the recipe's own first caveat.
+	const written = recipe.origin === 'kitchen';
 
 	return (
 		<div style={s.stack}>
@@ -768,17 +771,21 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 				}
 			>
 				<div style={{ ...s.meta, marginBottom: 12 }}>
-					{summarise(recipe) || 'The reel did not say how many it serves'}
+					{summarise(recipe) ||
+						(written ? 'Written for what you have' : 'The reel did not say how many it serves')}
 				</div>
 
 				{mostlyEstimated ? (
 					<Banner variant="warning">
-						The cook never gave amounts, so every quantity below is a sensible starting point
-						rather than their recipe. Taste as you go.
+						{written
+							? 'Nobody cooked this on camera, so every quantity below is a sensible starting point rather than a cook’s recipe. Taste as you go.'
+							: 'The cook never gave amounts, so every quantity below is a sensible starting point rather than their recipe. Taste as you go.'}
 					</Banner>
 				) : recipe.confidence === 'low' ? (
 					<Banner variant="warning">
-						The reel was vague in places, so parts of this are inferred. Taste as you go.
+						{written
+							? 'This was written for your ingredients rather than read from a video, so the amounts are estimates. Taste as you go.'
+							: 'The reel was vague in places, so parts of this are inferred. Taste as you go.'}
 					</Banner>
 				) : null}
 
@@ -809,7 +816,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 
 				{!!recipe.missingInfo?.length && (
 					<>
-						<div style={s.sectionTitle}>The reel never said</div>
+						<div style={s.sectionTitle}>{written ? 'Worth knowing' : 'The reel never said'}</div>
 						<ul style={{ ...s.muted, margin: 0, paddingLeft: 18 }}>
 							{recipe.missingInfo.map((m, i) => (
 								<li key={i} style={{ marginBottom: 5 }}>

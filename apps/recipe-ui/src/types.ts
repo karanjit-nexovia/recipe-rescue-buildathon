@@ -24,6 +24,17 @@ export interface Step {
 }
 
 export interface Recipe {
+	/**
+	 * Where this recipe came from. 'reel' is a reading of a real video, which is
+	 * every recipe the app extracts. 'kitchen' was written for the ingredients
+	 * someone had on hand, with no cook and no video behind it.
+	 *
+	 * This lives on the Recipe rather than in component state so it survives
+	 * being saved to the book and reopened weeks later — which is precisely when
+	 * mistaking a written recipe for a read one would matter, and when whatever
+	 * the screen said at the time is long gone.
+	 */
+	origin?: 'reel' | 'kitchen';
 	title?: string;
 	cuisine?: string;
 	servings?: number;
