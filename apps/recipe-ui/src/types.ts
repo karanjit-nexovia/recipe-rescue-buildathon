@@ -53,6 +53,17 @@ export interface Recipe {
 	ingredients?: Ingredient[];
 	steps?: Step[];
 	missingInfo?: string[];
+	/**
+	 * Things an experienced cook would add that the reel never mentioned — the
+	 * coriander at the end, the squeeze of lemon, the knob of butter.
+	 *
+	 * Kept OUT of ingredients and steps on purpose. Every other field is a
+	 * reading of what the cook actually did, and quietly mixing suggestions into
+	 * that would break the one promise the app makes: that you can tell what
+	 * came from the video and what did not. These are offered, clearly labelled,
+	 * and the recipe works without them.
+	 */
+	finishingTouches?: string[];
 }
 
 export interface SubLine {

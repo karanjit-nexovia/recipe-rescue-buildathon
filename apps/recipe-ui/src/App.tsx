@@ -247,6 +247,14 @@ const CSS = `
 @media (prefers-reduced-motion: reduce) { .rx-choice:hover { transform: none; } }
 
 
+
+/* Suggestions, not the recipe. Visibly its own thing, so nobody mistakes an
+   idea of ours for something the cook actually did. */
+.rx-touches { margin-top: 26px; padding: 16px 18px; border-radius: 10px; background: var(--rr-bg-hover, rgba(128,128,128,0.07)); }
+.rx-touches ul { margin: 0; padding-left: 17px; }
+.rx-touches li { font-size: 13px; line-height: 1.6; margin-bottom: 7px; }
+.rx-touches li:last-child { margin-bottom: 0; }
+
 /* --- finishing ------------------------------------------------------------ */
 @keyframes rx-rise { 0% { opacity: 0; transform: scale(0.94) translateY(10px); } 100% { opacity: 1; transform: none; } }
 .rx-done { text-align: center; padding: 50px 16px 40px; animation: rx-rise 420ms cubic-bezier(0.2,0.8,0.3,1) both; }
@@ -1151,7 +1159,11 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 								onToggleIng={toggleIng}
 								scale={scale}
 								onScale={setScale}
-								mostlyEstimated={false}
+								mostlyEstimated={
+									(recipe.ingredients ?? []).filter((i) => i.inferred).length /
+										Math.max(1, (recipe.ingredients ?? []).length) >=
+									MOSTLY_ESTIMATED
+								}
 							/>
 						</Card>
 					)}
@@ -1944,6 +1956,23 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 							))
 						) : (
 							<p style={s.muted}>No steps could be read from this one.</p>
+						)}
+
+						{!!recipe.finishingTouches?.length && (
+							<div className="rx-touches">
+								<div className="rx-label" style={{ marginBottom: 10 }}>
+									To make it taste like home
+								</div>
+								<p style={{ ...s.muted, marginTop: 0, marginBottom: 10 }}>
+									None of this was in the video — it is what someone who has made this a
+									hundred times would add. The recipe works without them.
+								</p>
+								<ul>
+									{recipe.finishingTouches.map((t, i) => (
+										<li key={i}>{t}</li>
+									))}
+								</ul>
+							</div>
 						)}
 
 						{!!recipe.missingInfo?.length && (

@@ -33,6 +33,10 @@ const RECIPE_EXAMPLE = {
 		},
 	],
 	missingInfo: ['The cook never said what size pan to use.'],
+	finishingTouches: [
+		'Fresh coriander, torn over off the heat — it turns bitter if it cooks.',
+		'A squeeze of lemon at the table, which lifts the whole thing.',
+	],
 };
 
 const SUBSTITUTION_EXAMPLE = {
@@ -165,6 +169,30 @@ export function buildExtractionQuestion(
 			'reconstructing a typical version of the dish from its name and a few visible cues. ' +
 			'If the transcript is empty, unintelligible or not about cooking, return steps as an ' +
 			'empty array and say so in missingInfo. Never invent a recipe from nothing.',
+	);
+
+	q.addInstruction(
+		'Never pass through a blanket like "the usual spices"',
+		'"All the Indian spices every household has", "the usual masalas", "my regular seasoning" ' +
+			'is the same problem as "thoda sa", one level up, and it is the whole reason this app ' +
+			'exists. A first-time cook does not know what that household keeps. Name the spices ' +
+			'the dish actually needs, one line each, each with its own amount and inferred set to ' +
+			'true — for a North Indian sabji that is turmeric, red chilli, cumin, coriander and ' +
+			'garam masala, not one line reading "Indian spices, 2 tsp". Say in missingInfo that ' +
+			'the cook named no spices individually and these are the standard set for the dish. ' +
+			'One clumped line is never acceptable, however the cook phrased it.',
+	);
+
+	q.addInstruction(
+		'Offer what would make it taste like home',
+		'Fill finishingTouches with two to four things an experienced cook of this dish would ' +
+			'add that this reel never mentioned — fresh coriander off the heat, a squeeze of ' +
+			'lemon, a spoon of cream, kasuri methi crushed between the palms, a tempering of ' +
+			'cumin in ghee. Say what each one does and when it goes in: "fresh coriander, torn ' +
+			'over at the end — it goes bitter if it cooks". These are suggestions, so they go ' +
+			'ONLY in finishingTouches, never in ingredients and never in steps: the reader has to ' +
+			'be able to tell what the cook did from what you are recommending. Leave it empty if ' +
+			'nothing would genuinely help.',
 	);
 
 	q.addInstruction(
