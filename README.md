@@ -22,33 +22,53 @@ technique. The reel assumes exactly the knowledge they lack.
 This is deliberately *not* a translation tool — the user already speaks the language.
 The gap is technique, not vocabulary.
 
-## What it does
+## How it works
+
+The app is a guided flow, one question per screen, in the order someone
+actually decides:
+
+```
+  welcome  ->  link or describe  ->  tick what you have  ->  the verdict
+                                                                  |
+                              +-----------------------------------+
+                              |                                   |
+                    shop for what is missing            cook something else
+                              |                                   |
+                              +----------------> the recipe <-----+
+                                                     |
+                                                  cook mode
+                                                     |
+                                             "congratulations"
+```
+
+The method comes **last**, not first. Nobody needs step seven while working out
+whether tonight is even possible.
 
 | | |
 |---|---|
-| **Ingest** | Paste an Instagram reel URL, upload a video file, or paste the caption as a fallback. |
-| **Extract** | Audio is transcribed and on-screen text is read from video frames — overlays are often where the real quantities live. |
-| **Ground** | Vague amounts become concrete ones, *marked as estimates* so you can tell what came from the cook and what was inferred. Steps are reordered into the order one person actually works in. |
+| **Ingest** | Paste an Instagram, TikTok or YouTube link, upload a video, or just describe the dish. YouTube arrives as a spoken transcript; a blocked video download falls back to the post caption. |
+| **Extract** | Audio, then on-screen text, then vision — each escalated only when the one before came back short. |
+| **Ground** | Vague amounts become concrete ones, marked as estimates. "All the usual spices" becomes a named list with quantities. Steps are reordered the way one person actually works. |
 | **Cue** | Every step that can go wrong gets a sensory cue: *"the seeds sizzle and start popping, and smell toasty — not dark brown"*. |
-| **Substitute** | One free-text box: "what's in your fridge?" Returns swaps with an honest note on what each costs in flavour — and refuses to swap the ingredient the dish is built around. |
-| **Cook** | Step-by-step mode with timers on the steps where a timer genuinely helps. Pure client state, no model calls at runtime. |
-| **Keep** | Saved recipes persist per user and re-open for free. |
-
-### Verified output
-
-On a real reel, the extractor produced `Rigatoni — 8 oz (225 g)`, matching the caption
-exactly; 13 of 13 steps carried doneness cues; and it reported `totalMinutes: 35`
-against the reel's claimed 20 — the honest number rather than the marketed one.
+| **Decide** | Tick what you have. The app works out what is missing, exactly, without asking a model to parse a sentence you typed. |
+| **Shop or adapt** | A shopping list you tick off as you go, with the right kind of grocery store nearby — or a different dish built from what is already in your kitchen. |
+| **Cook** | One step at a time, timers, arrow keys, and the ingredients that step needs pulled alongside it. |
+| **Finish** | Completing every step lands on a proper ending, and asks whether to keep the recipe — which is the first moment you actually know. |
 
 ## Numbers that mattered
 
 | Metric | Value |
 |---|---|
-| Cost per recipe | **~$0.056** |
-| Cost to re-open a saved recipe | **$0** |
+| Cost of a text run (link, caption, described dish) | **~33 platform tokens** |
+| Cost of a video run | **~760**, before the OCR escalation split |
+| Cost to re-open a saved recipe | **0** |
 | Link to finished recipe | **165s** (down from 213s) |
-| URL-validation cases handled | 15, including lookalike hosts, raw IPs, localhost |
+| Resolver tests, all passing | **15**, including lookalike hosts, raw IPs, localhost |
 | Video bytes through my server | **0** — the browser downloads direct from CDN |
+
+Those first two are measured from the platform's own billing ledger, not estimated.
+Video processing turned out to be 87% of all spend against 12% for every model call
+combined, which is what motivated the escalation ladder above.
 
 ## Architecture at a glance
 
@@ -63,13 +83,18 @@ against the reel's claimed 20 — the honest number rather than the marketed one
                                                   ▼
                                      ┌────────────────────────┐
                                      │  transcribe.pipe       │  no model, $0
-                                     │  audio  → text         │
-                                     │  frames → OCR → text   │
+                                     │  audio → text          │  always
                                      └───────────┬────────────┘
-                                                 │  under 80 chars?
+                                                 │  thin, or no amounts named?
                                                  ▼
                                      ┌────────────────────────┐
-                                     │  vision.pipe           │  escalation only
+                                     │  screentext.pipe       │  ~half the cost
+                                     │  frames → OCR → text   │  of a video run
+                                     └───────────┬────────────┘
+                                                 │  both came back empty?
+                                                 ▼
+                                     ┌────────────────────────┐
+                                     │  vision.pipe           │  dearest rung
                                      │  frames → image vision │
                                      └───────────┬────────────┘
                                                  ▼
@@ -79,10 +104,14 @@ against the reel's claimed 20 — the honest number rather than the marketed one
                                      └────────────────────────┘
 ```
 
-Three pipelines, but only one does any reasoning. `ask.pipe` is a single generic chat
-pipeline serving both recipe extraction *and* fridge substitution — all the prompting
-lives in `src/prompts.ts` as typed `Question` objects, so a new kind of question costs
-no new infrastructure.
+Four pipelines, but only one reasons. The other three are a cost ladder, each rung
+climbed only when the one below came back short: `transcribe` (audio, always run),
+`screentext` (frames and OCR, when the reel barely spoke or never named an amount),
+`vision` (an image model, when both came back empty).
+
+`ask.pipe` is a single generic chat pipeline serving extraction, substitution and the
+fallback dish alike — all the prompting lives in `src/prompts.ts` as typed `Question`
+objects, so a new kind of question costs no new infrastructure.
 
 Full detail: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
 
@@ -93,7 +122,8 @@ apps/recipe-ui/         The app. React + TypeScript, deployed to RocketRide stag
   src/prompts.ts        All prompting. Typed Question objects with expectJson.
   src/mediaSource.ts    Source-agnostic link resolution. New platform = one entry.
   src/usePipelines.ts   Pipeline lifecycle, timeouts, cost controls.
-  src/*.pipe            The three pipeline definitions.
+  src/*.pipe            The four pipeline definitions.
+resolver/test-resolver.sh  15-case contract and security suite for the Worker.
 resolver/               Cloudflare Worker. Resolves links, holds the Apify token.
 docs/                   Architecture, decisions, and the platform constraints found.
 briefs/                 The original build brief, kept as a historical record.
@@ -145,13 +175,18 @@ here rather than hidden:
 
 - The full adverse-input test matrix (private/deleted reels, expired CDN links,
   oversized uploads, cold launch) is specified but has not been run end to end.
-- 165s per recipe is dominated by frame-grab and OCR at 71s; the sampling rate is
-  governed by config fields absent from the platform schema.
+- Frame-grab and OCR is the remaining latency bottleneck. Its sampling rate is
+  governed by config fields absent from the platform schema, so it is escalated
+  rather than tuned.
+- No automated tests on the app itself. The resolver has a suite; the React layer is
+  covered by a type check and use.
 
-Closed: the model credential was suspected of being tied to the author's account, which
+Closed since: the model credential was suspected of being tied to the author's account, which
 would have meant the app failing for anyone else who launched it. It is not — it resolves
 from the server's process environment, and every account-scoped alternative was ruled out
-by measurement. Evidence in [docs/PLATFORM_NOTES.md](docs/PLATFORM_NOTES.md).
+by measurement. And a task reaped after three minutes idle used to surface as "failed to
+open a data pipe" on the next request — pipelines now restart themselves instead.
+Evidence for both in [docs/PLATFORM_NOTES.md](docs/PLATFORM_NOTES.md).
 
 ## Licence
 

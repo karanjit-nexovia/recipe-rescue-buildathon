@@ -121,6 +121,32 @@ fridge question, short enough that it stops billing while the user reads.
 
 ---
 
+## A reaped task reports itself as a broken data pipe
+
+After the idle TTL expires the task is gone, but a cached token knows nothing about it.
+The next request fails with:
+
+```
+Failed to open a data pipe. Common causes:
+ - Pipeline isn't running (wrong token or task terminated)
+ ...
+```
+
+The message names a transport problem for what is really a missing task, so matching on
+its text is the only signal available to tell "this token is stale" from "this request
+was malformed".
+
+**Why it bit so hard.** This app is read-heavy — a thirteen-step recipe takes minutes to
+read — so the gap between one request and the next routinely exceeds the TTL. Extract a
+recipe, read it, ask anything, and it failed. The token cache is cleared on reconnect and
+on disconnect, and neither is what happens here: the socket is fine, the task is gone.
+
+**Status:** designed around. Every pipeline call runs through a wrapper that drops the
+token and starts a fresh task once when the failure matches this shape. Retried exactly
+once — a new task failing the same way is not staleness.
+
+---
+
 ## Rules that fail the build outright
 
 Collected from the platform docs and from breaking them:
@@ -186,6 +212,39 @@ alternative has been positively ruled out rather than assumed.
 **Method note.** `setEnv(scope, env)` replaces the **entire** dictionary at that level
 rather than merging into it. Read, merge, write back — a naive `setEnv` call silently
 destroys every other key in that scope.
+
+---
+
+## What actually costs money
+
+Measured from the platform's billing ledger via `client.billing` — note the SDK puts
+these on `billing` while the docs describe them on `account`:
+`getCreditBalance`, `getUsageByUser`, `getTransactions`.
+
+| Line item | Share of spend |
+|---|---|
+| `cpu_utilization` | 56% |
+| `gpu_inference` | 40% |
+| `cpu_memory` | 4% |
+
+Split by pipeline, one number matters: the **video webhook took 5,350 tokens against 720
+for every chat call combined.** A video run costs roughly **760**; a chat call averages
+**33**. Video was 87% of all spend on an app whose reasoning is entirely chat.
+
+Two things follow, and both shaped the design:
+
+- **Flow testing should never touch video.** Links that resolve to text, pasted captions
+  and described dishes all cost about a chat call. Video uploads are for testing the
+  video path and rehearsing a demo, nothing else.
+- **Frames are escalated, not always read.** `transcribe.pipe` originally ran
+  `audio_transcribe` and `frame_grabber → ocr` in parallel on every upload, paying for
+  OCR on reels where the cook says every amount out loud. Splitting the frames into
+  `screentext.pipe` and running it only when the reel barely spoke — or spoke without
+  ever naming an amount carrying a unit — roughly halves a common-case video run.
+
+**A task bills while alive, not while working**, so the idle TTL is a cost lever rather
+than a tuning detail. It is 180s, and a task reaped mid-session is restarted
+transparently rather than paid to stay warm through every stretch of reading.
 
 ---
 

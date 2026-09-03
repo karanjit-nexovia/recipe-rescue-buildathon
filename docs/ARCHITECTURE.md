@@ -29,14 +29,22 @@ How a pasted link becomes a recipe, and why each piece is where it is.
         │  a browser File — identical to a manual upload from here on
         ▼
  ┌────────────────────────────────────────────┐
- │ transcribe.pipe                            │   Runs no model, so a run is free.
+ │ transcribe.pipe                            │   Runs no model. Always run.
  │   webhook → audio_transcribe      → text   │
- │   webhook → frame_grabber → ocr   → text   │
+ └──────┬─────────────────────────────────────┘
+        │  transcript
+        │
+        │  thin, OR no amount carrying a unit was ever said —
+        │  the quantities are in an overlay:
+        ▼
+ ┌────────────────────────────────────────────┐
+ │ screentext.pipe                            │   ~half the cost of a video
+ │   webhook → frame_grabber → ocr   → text   │   run. Escalated, not default.
  └──────┬─────────────────────────────────────┘
         │  transcript + on-screen text
         │
         │  if combined length < 80 chars, the reel was silent
-        │  and had no legible overlay — escalate:
+        │  and had no legible overlay — escalate again:
         ▼
  ┌────────────────────────────────────────────┐
  │ vision.pipe                                │   Costs money. Only runs when
@@ -46,8 +54,8 @@ How a pasted link becomes a recipe, and why each piece is where it is.
         ▼
  ┌────────────────────────────────────────────┐
  │ ask.pipe                                   │   One generic chat pipeline.
- │   chat → llm_openai → response_answers     │   Serves BOTH extraction and
- └──────┬─────────────────────────────────────┘   substitution.
+ │   chat → llm_openai → response_answers     │   Serves extraction, the fridge
+ └──────┬─────────────────────────────────────┘   check, and the fallback dish.
         │  JSON
         ▼
  ┌────────────────────────┐
@@ -58,7 +66,7 @@ How a pasted link becomes a recipe, and why each piece is where it is.
     Recipe object ──► render ──► cook mode ──► saved to the recipe book
 ```
 
-## 2. Why three pipelines and not one
+## 2. Why four pipelines and not one
 
 The obvious design is one pipeline that takes a video and returns a recipe. That was the
 original brief. It is the wrong shape for two reasons.
@@ -67,17 +75,60 @@ original brief. It is the wrong shape for two reasons.
 would mean paying model prices for work that is free. `transcribe.pipe` is therefore kept
 model-free, and a run of it costs nothing.
 
-**Escalation.** Most reels have usable audio or legible overlays. A minority — silent
-cooking videos over music, with no text — yield nothing from the cheap path. Vision over
-frames handles those, but it is the expensive option, so it must not run by default.
-Splitting it into `vision.pipe` behind an 80-character threshold cut the median
-link-to-recipe time from 213s to 165s, because the common case stopped paying for the
-rare one.
+**Escalation, twice over.** The three media pipelines are a cost ladder, and each rung is
+climbed only when the one below came back short.
+
+| Rung | Runs | Escalated when |
+|---|---|---|
+| `transcribe.pipe` | always | — |
+| `screentext.pipe` | frames → OCR | the reel barely spoke, or spoke without ever naming an amount carrying a unit |
+| `vision.pipe` | frames → image model | speech and screen text together came back near-empty |
+
+Vision was split out first, and cut median link-to-recipe from 213s to 165s. OCR was
+split out later, once the billing ledger showed video processing to be 87% of all spend
+at roughly 760 tokens a run against 33 for a chat call.
+
+The second condition on `screentext` is the interesting one. Skipping OCR whenever there
+is *any* speech would lose the quantities on exactly the reels this app exists for —
+"add some cream and the usual spices" is when the numbers live in an overlay. So the
+transcript is checked for amounts that carry a unit, three or more, and the frames are
+read whenever the cook never gave any.
 
 **Generality.** `ask.pipe` is a single `chat → llm → response_answers` pipeline with no
 recipe-specific configuration in it at all. Extraction and substitution are the same
 pipeline invoked with different `Question` objects. Adding a third kind of reasoning
 would need no new pipeline.
+
+## 2b. The order the app asks its questions
+
+The screen sequence is not the order the data arrives in — it is the order a person
+decides in:
+
+```
+welcome -> link or describe -> [extract] -> tick what you have -> verdict
+                                                                    |
+                                    +-------------------------------+
+                                    |                               |
+                          shop for what is missing        cook something else
+                                    |                               |
+                                    +---------> the recipe <--------+
+                                                     |
+                                            cook mode -> "congratulations"
+```
+
+The method is rendered **last**. It used to be first, with the fridge check below the
+whole thing, which meant scrolling past thirteen steps to answer a question you ask
+before cooking and then scrolling back up to cook.
+
+Two consequences worth stating:
+
+- **Ticking is the input.** A tick means "I have this", which makes the shopping list
+  exact rather than a model's reading of a sentence someone typed, and makes the fridge
+  check a statement of fact rather than a guess. Pantry basics start ticked, because
+  nobody thinks of salt and water as ingredients they *have*.
+- **The check is a snapshot.** Tick something off in the shop and the app retires the
+  swap lines that no longer apply and recomputes the count locally, rather than spending
+  another model call to be told what it can work out itself.
 
 ## 3. Where the prompting lives, and why
 

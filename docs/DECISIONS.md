@@ -77,7 +77,7 @@ Forced by the platform: the `prompt` node's `instructions` config is silently ig
 It turned out to be the better design regardless. Prompts are now typed, reviewable in a
 diff, and changeable without touching pipeline definitions.
 
-### Split vision out behind a threshold, rather than always running it
+### Escalate the expensive media steps, rather than always running them
 
 Vision over frames is the expensive path and only helps a minority of reels — silent
 cooking videos with no legible overlay. Running it on every reel meant every user paid
@@ -86,6 +86,14 @@ for the rare case.
 Escalating only when transcript plus screen text comes back under 80 characters cut
 link-to-recipe from **213s to 165s**, and removed the vision cost from the common path
 entirely.
+
+The same argument applied one rung lower, and was only noticed after reading the billing
+ledger: OCR ran on every upload too, and video was **87% of all spend** at roughly 760
+tokens a run against 33 for a chat call. Frames are now read only when the reel barely
+spoke, or spoke without ever naming an amount carrying a unit — the second condition
+mattering because "add some cream and the usual spices" is exactly when the quantities
+are in an overlay, and dropping OCR whenever there was speech would have lost them on the
+reels this app exists for.
 
 ### Link ingestion reuses the upload path — no second recipe pipeline
 
@@ -128,6 +136,50 @@ That is the intended trade. A screen frozen on a spinner is worse for the person
 of it than one wasted run is for the budget — and the task TTL reaps the run anyway.
 
 ---
+
+## Decisions made while using it
+
+The whole of day two was driven by testing the app rather than planning it. These came
+out of that, and each one was a bug found by use.
+
+### The method is the last thing shown, not the first
+
+The app began as one page holding everything at once. Answering "can I make this
+tonight" meant scrolling past thirteen steps to a fridge box below them, then scrolling
+back up to cook. The screens are now ordered the way the decision is: what am I cooking,
+do I have it, what do I do about what I am missing, and only then how it is made.
+
+### A tick means "I have this", and drives everything downstream
+
+Ingredient checkboxes started as mise-en-place progress and did nothing. Two readings
+competed for one control, and neither was wired to anything. Making a tick mean
+availability turned it into the app's main input: the shopping list is now exactly the
+unticked rows, the fridge check is told rather than asked, and the verdict recomputes
+locally as items go into the basket.
+
+### Suggestions are never mixed into the recipe
+
+Recipes carry `finishingTouches` — the coriander off the heat, the squeeze of lemon —
+in their own field, rendered in their own panel that says outright none of it was in the
+video. Every other field is a reading of what a cook actually did. The app's only real
+promise is that a beginner can tell those apart, and quietly folding our ideas into the
+ingredient list would break it for the sake of a nicer-looking recipe.
+
+### Describing a dish is a different job from reading a reel
+
+Both paths used the extraction prompt, whose central rule is "extract, do not
+reconstruct". Correct for a video; for a described dish it returned no method at all,
+having refused to invent what no video had shown. They are now separate modes, and the
+described one is told there is no video to talk about.
+
+### What is on screen is what it says it is
+
+Several bugs were the same bug wearing different clothes: a strikethrough that meant
+"done" applied to a tick that meant "have"; "The reel never said" printed over a dish
+nobody filmed; "Two ways forward" above a single button; a verdict still recommending a
+substitute for water bought thirty seconds earlier. Each was the interface asserting
+something that had stopped being true. They are worth listing together because the fix
+is always the same one — derive the words from the state instead of writing them once.
 
 ## Process
 
