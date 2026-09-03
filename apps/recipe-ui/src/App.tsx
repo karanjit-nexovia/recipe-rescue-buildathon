@@ -1032,6 +1032,19 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 		[saved],
 	);
 
+	const deleteRecipe = useCallback(
+		(id: string) => {
+			updateAppState((prev) => {
+				const existing = Array.isArray(prev.saved) ? (prev.saved as SavedRecipe[]) : [];
+				return { ...prev, saved: existing.filter((sv) => sv.id !== id) };
+			});
+			// If the open recipe was the one deleted, it is no longer saved — leave
+			// it on screen but stop claiming it lives in the book.
+			setSavedId((cur) => (cur === id ? null : cur));
+		},
+		[updateAppState],
+	);
+
 	const finishCooking = useCallback(() => {
 		if (savedId) {
 			updateAppState((prev) => {
@@ -1242,6 +1255,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 								go('recipe');
 							}}
 							onStart={() => go('source')}
+							onDelete={deleteRecipe}
 						/>
 					)}
 				</div>
@@ -2200,7 +2214,18 @@ const BookView: React.FC<{
 	saved: SavedRecipe[];
 	onOpen: (sv: SavedRecipe) => void;
 	onStart: () => void;
-}> = ({ loaded, saved, onOpen, onStart }) => {
+	onDelete: (id: string) => void;
+}> = ({ loaded, saved, onOpen, onStart, onDelete }) => {
+	// Saved recipes live server-side and there is no undo, so deleting asks
+	// once. The confirm lapses on its own — an armed delete button left sitting
+	// on the screen is a trap for whoever taps next.
+	const [confirming, setConfirming] = useState<string | null>(null);
+	useEffect(() => {
+		if (!confirming) return;
+		const t = setTimeout(() => setConfirming(null), 4000);
+		return () => clearTimeout(t);
+	}, [confirming]);
+
 	if (!loaded) return <p style={s.muted}>Loading your book…</p>;
 	if (!saved.length) {
 		return (
@@ -2218,13 +2243,30 @@ const BookView: React.FC<{
 					key={sv.id}
 					header={sv.recipe.title || 'Untitled'}
 					headerActions={
-						<Button variant="secondary" small onClick={() => onOpen(sv)}>
-							Open
-						</Button>
+						<div style={s.row}>
+							<Button
+								variant="secondary"
+								small
+								onClick={() => (confirming === sv.id ? onDelete(sv.id) : setConfirming(sv.id))}
+							>
+								{confirming === sv.id ? 'Tap again to delete' : 'Delete'}
+							</Button>
+							<Button variant="secondary" small onClick={() => onOpen(sv)}>
+								Open
+							</Button>
+						</div>
 					}
 				>
 					<div style={s.meta}>
-						{summarise(sv.recipe, `saved ${new Date(sv.savedAt).toLocaleDateString()}`)}
+						{summarise(
+							sv.recipe,
+							[
+								`saved ${new Date(sv.savedAt).toLocaleDateString()}`,
+								sv.cookedCount ? `cooked ${sv.cookedCount}x` : null,
+							]
+								.filter(Boolean)
+								.join('  ·  '),
+						)}
 					</div>
 				</Card>
 			))}
