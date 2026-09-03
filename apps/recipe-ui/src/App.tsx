@@ -634,10 +634,17 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			// once there is stored progress it is the user's answer, and re-ticking
 			// something they deliberately unticked would be the app arguing with
 			// them about whether they own salt.
-			const basics = (recipe?.ingredients ?? [])
-				.map((ing, i) => (isPantryBasic(ing) ? i : -1))
-				.filter((i) => i >= 0);
-			setDoneIng(basics);
+			//
+			// A recipe written FOR their ingredients is the exception: it was built
+			// from what they have, so every line is already in the kitchen. Making
+			// them tick the list again would be asking a question we just answered
+			// ourselves.
+			const all = recipe?.ingredients ?? [];
+			setDoneIng(
+				recipe?.origin === 'kitchen'
+					? all.map((_, i) => i)
+					: all.map((ing, i) => (isPantryBasic(ing) ? i : -1)).filter((i) => i >= 0),
+			);
 			setDoneStep([]);
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1010,7 +1017,11 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 				'This one is not from a video — it was written for what you said is in your kitchen. ' +
 					'Every quantity is an estimate.',
 			);
-			setView('recipe');
+			// Straight past the tick step — it is made of things they told us they
+			// have — but not straight past the verdict, which is the screen that
+			// says so. Skipping it dropped the user onto a recipe with no
+			// acknowledgement that the problem they came with had been solved.
+			setView('verdict');
 		} catch (err) {
 			setError(errText(err));
 		} finally {
@@ -1822,7 +1833,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 							mostlyEstimated={mostlyEstimated}
 						/>
 						)}
-						{stage === 'verdict' && (
+						{stage === 'verdict' && sub && (
 						<div className="rx-panel">
 							<div className="rx-label">Can you make this tonight?</div>
 				<p style={{ ...s.muted, marginTop: 0 }}>
