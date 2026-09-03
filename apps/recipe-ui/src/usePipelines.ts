@@ -63,6 +63,15 @@ const ASK_TIMEOUT_MS = 2 * 60 * 1000;
 const USE_TIMEOUT_MS = 90 * 1000;
 
 /**
+ * What a dead task looks like from the client side.
+ *
+ * The platform reports it as a failure to open a data pipe rather than as a
+ * missing task, so matching on the message is the only signal available.
+ */
+const DEAD_TASK =
+	/failed to open a data pipe|isn't running|is not running|task terminated|no such task|invalid token|unknown token|token .*(expired|invalid)/i;
+
+/**
  * Reject if `work` outruns `ms`.
  *
  * This frees the UI; it cannot cancel the server-side run, which keeps going
@@ -165,10 +174,36 @@ export function usePipelines() {
 		[client, isConnected],
 	);
 
+	/**
+	 * Run something against a live task, starting a new one if the cached token
+	 * points at a corpse.
+	 *
+	 * TASK_TTL reaps a task after three minutes idle and the token cache has no
+	 * idea it happened — so reading a recipe for a few minutes and then asking
+	 * anything at all failed with "Failed to open a data pipe". The cache is
+	 * cleared on reconnect and on disconnect, but neither of those is what
+	 * happens here: the socket is fine, the task is gone.
+	 *
+	 * Retried exactly once. If a fresh task fails the same way the problem is
+	 * not staleness and the error should reach the user.
+	 */
+	const withLiveTask = useCallback(
+		async <T,>(name: PipeName, run: (token: string) => Promise<T>): Promise<T> => {
+			try {
+				return await run(await tokenFor(name));
+			} catch (err) {
+				if (!DEAD_TASK.test((err as Error)?.message ?? '')) throw err;
+				delete tokens.current[name];
+				return run(await tokenFor(name));
+			}
+		},
+		[tokenFor],
+	);
+
 	/** Upload a video and pull back its spoken transcript and on-screen text. */
 	const transcribe = useCallback(
 		async (file: File): Promise<TranscribeResult> => {
-			const token = await tokenFor('transcribe');
+			return withLiveTask('transcribe', async (token) => {
 			const uploads = await withTimeout(
 				client!.sendFiles([{ file, mimetype: file.type || 'video/mp4' }], token),
 				TRANSCRIBE_TIMEOUT_MS,
@@ -195,8 +230,9 @@ export function usePipelines() {
 			};
 
 			return { transcript: join('transcript'), screenText: join('screentext') };
+			});
 		},
-		[client, tokenFor],
+		[client, withLiveTask],
 	);
 
 	/**
@@ -225,14 +261,15 @@ export function usePipelines() {
 	/** Ask the chat pipeline something and parse the JSON answer. */
 	const ask = useCallback(
 		async <T,>(build: (Question: never) => unknown): Promise<T> => {
-			const token = await tokenFor('ask');
-			const { Question } = await import('rocketride');
-			// The builders take the constructor rather than importing it, so
-			// prompts.ts stays free of a value import from the client bundle.
-			// The result is a real Question; the cast just re-states that.
-			const chat = client!.chat.bind(client!);
-			const question = build(Question as never) as Parameters<typeof chat>[0]['question'];
-			const result = await withTimeout(chat({ token, question }), ASK_TIMEOUT_MS, 'The model');
+			const result = await withLiveTask('ask', async (token) => {
+				const { Question } = await import('rocketride');
+				// The builders take the constructor rather than importing it, so
+				// prompts.ts stays free of a value import from the client bundle.
+				// The result is a real Question; the cast just re-states that.
+				const chat = client!.chat.bind(client!);
+				const question = build(Question as never) as Parameters<typeof chat>[0]['question'];
+				return withTimeout(chat({ token, question }), ASK_TIMEOUT_MS, 'The model');
+			});
 
 			// expectJson usually returns an already-parsed object, but fall back
 			// to text extraction — model output is data, not a contract.
@@ -240,7 +277,7 @@ export function usePipelines() {
 			if (!parsed) throw new Error('The model did not return a readable answer. Try again.');
 			return parsed;
 		},
-		[client, tokenFor],
+		[client, withLiveTask],
 	);
 
 	const extractRecipe = useCallback(
