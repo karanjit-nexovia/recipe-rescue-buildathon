@@ -70,7 +70,10 @@ const SCALES: Array<[number, string]> = [
 	[3, '3x'],
 ];
 
-type View = 'ingest' | 'recipe' | 'cook' | 'book';
+type View = 'welcome' | 'source' | 'ingest' | 'ingredients' | 'verdict' | 'recipe' | 'cook' | 'book';
+
+/** Which way in the user chose on the second screen. */
+type SourceMode = 'link' | 'describe';
 
 // =============================================================================
 // STYLES
@@ -171,6 +174,8 @@ const CSS = `
 .rx-split { display: grid; grid-template-columns: 1fr; gap: 30px; }
 @media (min-width: 880px) {
   .rx-split { grid-template-columns: minmax(260px, 330px) 1fr; gap: 44px; align-items: start; }
+  /* The verdict screen has no method beside it, so it takes the full width. */
+  .rx-split.rx-solo { grid-template-columns: 1fr; max-width: 680px; margin: 0 auto; }
 }
 
 .rx-label {
@@ -215,6 +220,32 @@ const CSS = `
 .rx-caveats ul { margin: 0; padding-left: 17px; }
 .rx-caveats li { font-size: 12.5px; line-height: 1.55; color: var(--rr-text-secondary); margin-bottom: 6px; }
 
+
+/* --- the guided flow ------------------------------------------------------ */
+.rx-hero { text-align: center; padding: 44px 16px 36px; }
+.rx-hero h1 { font-size: 30px; line-height: 1.2; font-weight: 650; letter-spacing: -0.5px; margin: 0 0 12px; }
+.rx-hero p { font-size: 14.5px; line-height: 1.6; color: var(--rr-text-secondary); margin: 0 auto 26px; max-width: 460px; }
+.rx-choices { display: grid; gap: 14px; grid-template-columns: 1fr; max-width: 620px; margin: 0 auto; }
+@media (min-width: 680px) { .rx-choices { grid-template-columns: 1fr 1fr; } }
+.rx-choice {
+  text-align: left; appearance: none; font: inherit; cursor: pointer;
+  padding: 20px; border-radius: 12px;
+  border: 1px solid var(--rr-border, rgba(128,128,128,0.35));
+  background: transparent; color: inherit;
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+.rx-choice:hover { border-color: var(--rr-accent, #6b8afd); background: var(--rr-bg-hover, rgba(128,128,128,0.06)); transform: translateY(-2px); }
+.rx-choice b { display: block; font-size: 15px; margin-bottom: 6px; }
+.rx-choice span { font-size: 12.5px; line-height: 1.55; color: var(--rr-text-secondary); }
+.rx-steps { display: flex; gap: 7px; align-items: center; justify-content: center; margin-bottom: 22px; }
+.rx-pip { width: 26px; height: 3px; border-radius: 2px; background: var(--rr-bg-hover, rgba(128,128,128,0.25)); transition: background 240ms ease; }
+.rx-pip.is-on { background: var(--rr-accent, #6b8afd); }
+.rx-pip.is-past { background: var(--rr-text-secondary); opacity: 0.4; }
+.rx-verdict { text-align: center; padding: 10px 0 26px; }
+.rx-verdict h2 { font-size: 23px; font-weight: 640; margin: 0 0 10px; letter-spacing: -0.3px; }
+.rx-verdict p { font-size: 14px; line-height: 1.6; color: var(--rr-text-secondary); margin: 0 auto; max-width: 520px; }
+@media (prefers-reduced-motion: reduce) { .rx-choice:hover { transform: none; } }
+
 /* --- motion ------------------------------------------------------------- */
 @keyframes rx-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
 .rx-in { animation: rx-in 280ms cubic-bezier(0.2,0.7,0.3,1) both; }
@@ -251,10 +282,8 @@ const CSS = `
 /* The availability check belongs beside the ingredients it asks about, not
    below thirteen steps. It also fills the column the sticky aside used to
    leave empty. */
-.rx-panel {
-  margin-top: 26px; padding-top: 20px;
-  border-top: 1px solid var(--rr-border-subtle, rgba(128,128,128,0.13));
-}
+.rx-panel { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--rr-border-subtle, rgba(128,128,128,0.13)); }
+.rx-solo .rx-panel { margin-top: 0; padding-top: 0; border-top: 0; }
 .rx-panel textarea { font-size: 13px; }
 
 /* --- serving scaler ------------------------------------------------------ */
@@ -535,7 +564,8 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 		loaded: boolean;
 	};
 
-	const [view, setView] = useState<View>('ingest');
+	const [view, setView] = useState<View>('welcome');
+	const [sourceMode, setSourceMode] = useState<SourceMode>('link');
 	const [busy, setBusy] = useState<string | null>(null);
 	const [elapsed, setElapsed] = useState(0);
 	const [error, setError] = useState<string | null>(null);
@@ -839,7 +869,9 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 
 				setRecipe(parsed);
 				setSavedId(null);
-				setView('recipe');
+				// Straight to "what have you got" rather than the method. The
+				// method is the last question, not the first.
+				setView('ingredients');
 			} catch (err) {
 				setError(errText(err));
 			} finally {
@@ -886,14 +918,14 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			const all = recipe.ingredients ?? [];
 			const named = (list: Ingredient[]) =>
 				list.map((i) => [i.item, i.quantity].filter(Boolean).join(' — ')).filter(Boolean);
-			setSub(
-				await checkFridge(
+			const answer = await checkFridge(
 					recipe,
 					fridge,
-					named(all.filter((_, i) => doneIng.includes(i))),
-					named(all.filter((_, i) => !doneIng.includes(i))),
-				),
+				named(all.filter((_, i) => doneIng.includes(i))),
+				named(all.filter((_, i) => !doneIng.includes(i))),
 			);
+			setSub(answer);
+			setView('verdict');
 		} catch (err) {
 			setError(errText(err));
 		} finally {
@@ -943,6 +975,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			setRecipe({ ...parsed, origin: 'kitchen' });
 			setSub(null);
 			setSavedId(null);
+			setDoneIng([]);
 			setNotice(
 				'This one is not from a video — it was written for what you said is in your kitchen. ' +
 					'Every quantity is an estimate.',
@@ -981,7 +1014,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 
 	const menu = {
 		entries: [
-			{ id: 'ingest', label: 'New recipe' },
+			{ id: 'welcome', label: 'New recipe' },
 			{ id: 'recipe', label: 'Recipe' },
 			{ id: 'cook', label: 'Cook' },
 			{ id: 'book', label: 'My book', count: saved.length || undefined },
@@ -1010,8 +1043,29 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 						</Banner>
 					)}
 
+					<StepPips view={view} />
+
+					{view === 'welcome' && (
+						<WelcomeView
+							savedCount={saved.length}
+							onStart={() => setView('source')}
+							onBook={() => setView('book')}
+						/>
+					)}
+
+					{view === 'source' && (
+						<SourceView
+							onPick={(mode) => {
+								setSourceMode(mode);
+								setView('ingest');
+							}}
+						/>
+					)}
+
 					{view === 'ingest' && (
 						<IngestView
+							mode={sourceMode}
+							onBack={() => setView('source')}
 							busy={!!busy}
 							pasted={pasted}
 							setPasted={setPasted}
@@ -1019,6 +1073,65 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 							onPaste={() => void runExtract({ text: pasted.trim() })}
 							onLink={(link) => void runExtract({ link })}
 						/>
+					)}
+
+					{view === 'ingredients' && recipe && (
+						<Card
+							header={recipe.title || 'Your recipe'}
+							headerActions={
+								<Button
+									disabled={!!busy || doneIng.length === 0}
+									onClick={() => void runSubstitute()}
+								>
+									{doneIng.length === 0 ? 'Tick what you have' : 'Next'}
+								</Button>
+							}
+						>
+							<p style={{ ...s.muted, marginTop: 0 }}>
+								Tick everything you already have. Salt, oil and water are ticked for you —
+								untick them if you have actually run out.
+							</p>
+							<IngredientList
+								ingredients={recipe.ingredients ?? []}
+								grouped={groupIngredients(recipe.ingredients ?? [])}
+								servings={recipe.servings}
+								doneIng={doneIng}
+								onToggleIng={toggleIng}
+								scale={scale}
+								onScale={setScale}
+								mostlyEstimated={false}
+							/>
+						</Card>
+					)}
+
+					{view === 'verdict' && recipe && (
+						<VerdictView
+							missingCount={(recipe.ingredients ?? []).length - doneIng.length}
+							verdict={sub?.verdict}
+							onShowRecipe={() => setView('recipe')}
+						>
+							<RecipeView
+								recipe={recipe}
+								fridge={fridge}
+								setFridge={setFridge}
+								sub={sub}
+								busy={!!busy}
+								onSubstitute={() => void runSubstitute()}
+								onCookAlternative={() => void runCookAlternative()}
+								doneIng={doneIng}
+								doneStep={doneStep}
+								onToggleIng={toggleIng}
+								onToggleStep={toggleStep}
+								scale={scale}
+								onScale={setScale}
+								onSave={saveRecipe}
+								isSaved={!!savedId}
+								canSave={loaded}
+								onCook={() => setView('cook')}
+								stage="verdict"
+								onContinue={() => setView('recipe')}
+							/>
+						</VerdictView>
 					)}
 
 					{view === 'recipe' &&
@@ -1067,7 +1180,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 								setSub(null);
 								go('recipe');
 							}}
-							onStart={() => go('ingest')}
+							onStart={() => go('source')}
 						/>
 					)}
 				</div>
@@ -1081,13 +1194,16 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 // =============================================================================
 
 const IngestView: React.FC<{
+	/** Which half of this screen the user asked for on the previous one. */
+	mode: SourceMode;
 	busy: boolean;
 	pasted: string;
 	setPasted: (v: string) => void;
 	onFiles: (files: FileList) => void;
 	onPaste: () => void;
 	onLink: (link: string) => void;
-}> = ({ busy, pasted, setPasted, onFiles, onPaste, onLink }) => {
+	onBack: () => void;
+}> = ({ mode, busy, pasted, setPasted, onFiles, onPaste, onLink, onBack }) => {
 	const [link, setLink] = useState('');
 	const submitLink = () => {
 		if (link.trim()) onLink(link.trim());
@@ -1098,7 +1214,15 @@ const IngestView: React.FC<{
 	const pastedIsLink = looksLikeLink(pasted);
 
 	return (
-		<div style={s.stack}>
+		<div style={s.stack} className="rx-in">
+			<div>
+				<Button variant="secondary" small onClick={onBack}>
+					Back
+				</Button>
+			</div>
+
+			{mode === 'link' && (
+				<>
 			<Card header="Paste a cooking video or recipe link">
 				<p style={{ ...s.muted, marginTop: 0 }}>
 					Verified for {verifiedProviders().join(', ')}. Anything else — paste the recipe
@@ -1125,11 +1249,14 @@ const IngestView: React.FC<{
 				hint="One at a time — MP4, MOV or WEBM. Works even when the reel has no words at all."
 				onFiles={onFiles}
 			/>
+				</>
+			)}
 
-			<Card header="Or paste the recipe text">
+			{mode === 'describe' && (
+			<Card header="Tell me what you want to make">
 				<p style={{ ...s.muted, marginTop: 0 }}>
-					The caption, a voice note, or your own scribbled notes. On Instagram, long-press
-					the caption and hit copy — that is the fastest route.
+					Describe the dish, or paste a caption or your own notes. The more you tell me, the
+					less I have to guess — but a name and a few lines is enough to start.
 				</p>
 				<textarea
 					style={s.textarea}
@@ -1147,6 +1274,7 @@ const IngestView: React.FC<{
 					{pastedIsLink && <span style={s.meta}>That is a link — I will fetch it.</span>}
 				</div>
 			</Card>
+			)}
 		</div>
 	);
 };
@@ -1154,6 +1282,214 @@ const IngestView: React.FC<{
 // =============================================================================
 // RECIPE
 // =============================================================================
+
+// =============================================================================
+// THE GUIDED FLOW
+//
+// One question per screen, in the order someone actually decides: what am I
+// cooking, do I have it, what do I do about what I am missing, and only then
+// how is it made. The method used to be the first thing on screen and the
+// decision the last, which is backwards — nobody needs step seven while
+// working out whether tonight is even possible.
+// =============================================================================
+
+const STEP_ORDER: View[] = ['source', 'ingest', 'ingredients', 'verdict', 'recipe'];
+
+const StepPips: React.FC<{ view: View }> = ({ view }) => {
+	const at = STEP_ORDER.indexOf(view);
+	if (at < 0) return null;
+	return (
+		<div className="rx-steps">
+			{STEP_ORDER.map((_, i) => (
+				<span key={i} className={`rx-pip${i === at ? ' is-on' : i < at ? ' is-past' : ''}`} />
+			))}
+		</div>
+	);
+};
+
+const WelcomeView: React.FC<{ onStart: () => void; savedCount: number; onBook: () => void }> = ({
+	onStart,
+	savedCount,
+	onBook,
+}) => (
+	<div className="rx-hero rx-in">
+		<h1>Welcome to the journey of being a master chef</h1>
+		<p>
+			Send me a cooking reel, or just tell me what you want to eat. I will turn it into a
+			recipe you can actually follow — real amounts, the right order, and what it should look
+			like when it is ready.
+		</p>
+		<div style={{ ...s.row, justifyContent: 'center' }}>
+			<Button onClick={onStart}>Let us cook</Button>
+			{savedCount > 0 && (
+				<Button variant="secondary" onClick={onBook}>
+					Open my book ({savedCount})
+				</Button>
+			)}
+		</div>
+	</div>
+);
+
+const SourceView: React.FC<{ onPick: (mode: SourceMode) => void }> = ({ onPick }) => (
+	<div className="rx-in">
+		<div className="rx-hero" style={{ paddingBottom: 22 }}>
+			<h1 style={{ fontSize: 24 }}>What are we making?</h1>
+			<p style={{ marginBottom: 0 }}>Two ways in. Both end up in the same place.</p>
+		</div>
+		<div className="rx-choices">
+			<button type="button" className="rx-choice" onClick={() => onPick('link')}>
+				<b>I have a link</b>
+				<span>
+					Paste a reel from Instagram, TikTok or YouTube — or drop the video file straight in.
+					This is the one that reads what the cook actually did.
+				</span>
+			</button>
+			<button type="button" className="rx-choice" onClick={() => onPick('describe')}>
+				<b>Let me describe it</b>
+				<span>
+					Tell me the dish, or paste a caption or your own notes. Good for the thing your mum
+					makes that was never filmed.
+				</span>
+			</button>
+		</div>
+	</div>
+);
+
+const VerdictView: React.FC<{
+	missingCount: number;
+	verdict?: string;
+	onShowRecipe: () => void;
+	children?: React.ReactNode;
+}> = ({ missingCount, verdict, onShowRecipe, children }) => (
+	<div className="rx-in">
+		<div className="rx-verdict">
+			<h2>
+				{missingCount === 0
+					? 'Woohoo — you have everything'
+					: `Looks like you are missing ${missingCount} thing${missingCount > 1 ? 's' : ''}`}
+			</h2>
+			<p>
+				{verdict ||
+					(missingCount === 0
+						? 'Nothing stands between you and dinner. Here is how it is made.'
+						: 'Two ways forward. Neither of them is giving up.')}
+			</p>
+			{missingCount === 0 && (
+				<div style={{ ...s.row, justifyContent: 'center', marginTop: 20 }}>
+					<Button onClick={onShowRecipe}>Show me the recipe</Button>
+				</div>
+			)}
+		</div>
+		{children}
+	</div>
+);
+
+// =============================================================================
+// INGREDIENTS — shared by the tick step and the finished recipe, so the two
+// can never drift into showing the same list differently.
+// =============================================================================
+
+interface IngredientListProps {
+	ingredients: Ingredient[];
+	grouped: Array<{ name?: string; items: Ingredient[] }>;
+	servings?: number;
+	doneIng: number[];
+	onToggleIng: (i: number) => void;
+	scale: number;
+	onScale: (factor: number) => void;
+	mostlyEstimated: boolean;
+}
+
+const IngredientList: React.FC<IngredientListProps> = ({
+	ingredients,
+	grouped,
+	servings,
+	doneIng,
+	onToggleIng,
+	scale,
+	onScale,
+	mostlyEstimated,
+}) => (
+	<>
+						{ingredients.length > 0 && (
+							<>
+								{servings ? (
+									<div style={{ ...s.row, marginBottom: 14, justifyContent: 'space-between' }}>
+										<span style={{ fontSize: 12, color: 'var(--rr-text-secondary)' }}>
+											Serves {Math.round(servings * scale)}
+										</span>
+										<span className="rx-scale">
+											{SCALES.map(([factor, label]) => (
+												<button
+													key={label}
+													type="button"
+													className={scale === factor ? 'is-on' : undefined}
+													onClick={() => onScale(factor)}
+												>
+													{label}
+												</button>
+											))}
+										</span>
+									</div>
+								) : null}
+
+								<div className="rx-progress">
+									<div className="rx-bar">
+										<div
+											className="rx-bar-fill"
+											style={{ width: `${(doneIng.length / ingredients.length) * 100}%` }}
+										/>
+									</div>
+									<span className="rx-count">
+										{doneIng.length}/{ingredients.length} in your kitchen
+									</span>
+								</div>
+							</>
+						)}
+
+						{ingredients.length ? (
+							grouped.map((g, gi) => (
+								<div className="rx-group" key={gi}>
+									{g.name && <div className="rx-group-name">{g.name}</div>}
+									{g.items.map((ing) => {
+										const i = ingredients.indexOf(ing);
+										const done = doneIng.includes(i);
+										return (
+											<div
+												className={`rx-ing${done ? ' is-done' : ''}`}
+												key={i}
+												onClick={() => onToggleIng(i)}
+												role="checkbox"
+												aria-checked={done}
+												tabIndex={0}
+												onKeyDown={(e) => {
+													if (e.key === 'Enter' || e.key === ' ') {
+														e.preventDefault();
+														onToggleIng(i);
+													}
+												}}
+											>
+												<div className="rx-ing-name">
+													<span className="rx-box">✓</span>
+													<span>
+														{ing.item ?? '—'}
+														{ing.inferred && !mostlyEstimated && <span className="rx-est">est</span>}
+													</span>
+												</div>
+												<div className="rx-ing-qty">
+													{ing.quantity ? scaleQuantity(ing.quantity, scale) : '—'}
+												</div>
+												{ing.note && <div className="rx-ing-note">{ing.note}</div>}
+											</div>
+										);
+									})}
+								</div>
+							))
+						) : (
+							<p style={s.muted}>Nothing could be read from this one.</p>
+						)}
+	</>
+);
 
 interface RecipeViewProps {
 	recipe: Recipe;
@@ -1176,6 +1512,9 @@ interface RecipeViewProps {
 	onToggleStep: (i: number) => void;
 	scale: number;
 	onScale: (factor: number) => void;
+	/** 'verdict' shows only the can-I-make-this answer; 'recipe' shows the dish. */
+	stage?: 'verdict' | 'recipe';
+	onContinue?: () => void;
 }
 
 const RecipeView: React.FC<RecipeViewProps> = ({
@@ -1192,6 +1531,8 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 	onToggleStep,
 	scale,
 	onScale,
+	stage = 'recipe',
+	onContinue,
 	onSave,
 	isSaved,
 	canSave,
@@ -1292,6 +1633,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 					</div>
 				}
 			>
+				{stage === 'recipe' && (
 				<div className="rx-head rx-in">
 					<div className="rx-chips">
 						{chips.length ? (
@@ -1308,91 +1650,27 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 					</div>
 				</div>
 
-				{/* At most one. The old screen could stack five coloured blocks
-				    before a single word of the recipe. */}
-				{estimateNote && <Banner variant="warning">{estimateNote}</Banner>}
+			)}
 
-				<div className="rx-split">
+				{stage === 'recipe' && estimateNote && <Banner variant="warning">{estimateNote}</Banner>}
+
+				<div className={`rx-split${stage === 'verdict' ? ' rx-solo' : ''}`}>
 					<aside className="rx-aside rx-in rx-in-2">
-						<div className="rx-label">Ingredients — tick what you have</div>
+						{stage === 'recipe' && <div className="rx-label">Ingredients</div>}
 
-						{ingredients.length > 0 && (
-							<>
-								{recipe.servings ? (
-									<div style={{ ...s.row, marginBottom: 14, justifyContent: 'space-between' }}>
-										<span style={{ fontSize: 12, color: 'var(--rr-text-secondary)' }}>
-											Serves {Math.round(recipe.servings * scale)}
-										</span>
-										<span className="rx-scale">
-											{SCALES.map(([factor, label]) => (
-												<button
-													key={label}
-													type="button"
-													className={scale === factor ? 'is-on' : undefined}
-													onClick={() => onScale(factor)}
-												>
-													{label}
-												</button>
-											))}
-										</span>
-									</div>
-								) : null}
-
-								<div className="rx-progress">
-									<div className="rx-bar">
-										<div
-											className="rx-bar-fill"
-											style={{ width: `${(doneIng.length / ingredients.length) * 100}%` }}
-										/>
-									</div>
-									<span className="rx-count">
-										{doneIng.length}/{ingredients.length} in your kitchen
-									</span>
-								</div>
-							</>
+						{stage === 'recipe' && (
+						<IngredientList
+							ingredients={ingredients}
+							grouped={grouped}
+							servings={recipe.servings}
+							doneIng={doneIng}
+							onToggleIng={onToggleIng}
+							scale={scale}
+							onScale={onScale}
+							mostlyEstimated={mostlyEstimated}
+						/>
 						)}
-
-						{ingredients.length ? (
-							grouped.map((g, gi) => (
-								<div className="rx-group" key={gi}>
-									{g.name && <div className="rx-group-name">{g.name}</div>}
-									{g.items.map((ing) => {
-										const i = ingredients.indexOf(ing);
-										const done = doneIng.includes(i);
-										return (
-											<div
-												className={`rx-ing${done ? ' is-done' : ''}`}
-												key={i}
-												onClick={() => onToggleIng(i)}
-												role="checkbox"
-												aria-checked={done}
-												tabIndex={0}
-												onKeyDown={(e) => {
-													if (e.key === 'Enter' || e.key === ' ') {
-														e.preventDefault();
-														onToggleIng(i);
-													}
-												}}
-											>
-												<div className="rx-ing-name">
-													<span className="rx-box">✓</span>
-													<span>
-														{ing.item ?? '—'}
-														{ing.inferred && !mostlyEstimated && <span className="rx-est">est</span>}
-													</span>
-												</div>
-												<div className="rx-ing-qty">
-													{ing.quantity ? scaleQuantity(ing.quantity, scale) : '—'}
-												</div>
-												{ing.note && <div className="rx-ing-note">{ing.note}</div>}
-											</div>
-										);
-									})}
-								</div>
-							))
-						) : (
-							<p style={s.muted}>Nothing could be read from this one.</p>
-						)}
+						{stage === 'verdict' && (
 						<div className="rx-panel">
 							<div className="rx-label">Can you make this tonight?</div>
 				<p style={{ ...s.muted, marginTop: 0 }}>
@@ -1511,8 +1789,10 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 					</div>
 				)}
 						</div>
+						)}
 					</aside>
 
+					{stage === 'recipe' && (
 					<section className="rx-in rx-in-3">
 						<div className="rx-label">Method</div>
 
@@ -1555,6 +1835,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 							</div>
 						)}
 					</section>
+					)}
 				</div>
 			</Card>
 		</div>
