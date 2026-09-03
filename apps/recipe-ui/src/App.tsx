@@ -47,6 +47,20 @@ const VIDEO_RE = /\.(mp4|mov|m4v|webm|avi|mkv)$/i;
  *  say it once at the top instead. */
 const MOSTLY_ESTIMATED = 0.6;
 
+/**
+ * Things nobody thinks of as ingredients they "have" — they are just there.
+ *
+ * Making someone tick Salt, Oil and Water is friction, and forgetting to tick
+ * them produces a wrong answer: the fridge check dutifully reports the salt as
+ * missing and hands back a recipe with no seasoning. These start ticked, and
+ * anyone who genuinely has run out can untick them.
+ */
+const PANTRY_BASICS =
+	/^(salt|sea salt|table salt|kosher salt|water|oil|cooking oil|vegetable oil|olive oil|neutral oil|sunflower oil|black pepper|pepper|sugar)\b/i;
+
+const isPantryBasic = (ing: Ingredient): boolean =>
+	PANTRY_BASICS.test((ing.item ?? '').replace(/\(.*?\)/g, '').trim());
+
 /** Halving and doubling is what people actually do; anything finer is a slider
  *  nobody asked for. Labels stay in the language of servings, not multipliers. */
 const SCALES: Array<[number, string]> = [
@@ -531,8 +545,21 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 		const mine = recipeKey ? store?.[recipeKey] : undefined;
 		const nums = (v: unknown): number[] =>
 			Array.isArray(v) ? v.filter((n): n is number => typeof n === 'number') : [];
-		setDoneIng(nums(mine?.ing));
-		setDoneStep(nums(mine?.step));
+
+		if (mine) {
+			setDoneIng(nums(mine.ing));
+			setDoneStep(nums(mine.step));
+		} else {
+			// Fresh recipe: start the pantry basics ticked. Only on first sight —
+			// once there is stored progress it is the user's answer, and re-ticking
+			// something they deliberately unticked would be the app arguing with
+			// them about whether they own salt.
+			const basics = (recipe?.ingredients ?? [])
+				.map((ing, i) => (isPantryBasic(ing) ? i : -1))
+				.filter((i) => i >= 0);
+			setDoneIng(basics);
+			setDoneStep([]);
+		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [recipeKey]);
 
@@ -1142,7 +1169,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 	// screen, holding the only two numbers anyone plans an evening around.
 	const chips = [
 		recipe.cuisine,
-		recipe.servings ? `Serves ${recipe.servings}` : null,
+		recipe.servings ? `Serves ${Math.round(recipe.servings * scale)}` : null,
 		recipe.totalMinutes ? `${recipe.totalMinutes} min` : null,
 	].filter(Boolean) as string[];
 

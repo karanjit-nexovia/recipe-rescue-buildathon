@@ -168,6 +168,19 @@ export function buildExtractionQuestion(
 	);
 
 	q.addInstruction(
+		'One line per ingredient, and the amount is the total',
+		'When an ingredient is used in more than one step — spices in the marinade and again in ' +
+			'the sauce, oil for frying and again for finishing — the quantity on its line must be ' +
+			'the TOTAL across every use, and the note must say how it splits: "1 tsp in the ' +
+			'marinade, 1 tsp in the sauce". Listing a single use as though it were the whole ' +
+			'amount is the worst error you can make here. Someone measures out what the list ' +
+			'says, uses it, reaches the second step and is short, having already committed the ' +
+			'rest of the dish. They cannot recover from that, and they will not know why it went ' +
+			'wrong. Where a group is set, total within the group; the same spice in two groups ' +
+			'stays two lines, one per group.',
+	);
+
+	q.addInstruction(
 		'Group ingredients by the part of the dish they belong to',
 		'When a dish has distinct components — a filling and a sauce, a marinade and a salad — ' +
 			'set group on every ingredient to the component it belongs to, phrased as the cook ' +
@@ -315,8 +328,17 @@ export function buildSubstitutionQuestion(
 	q.addInstruction(
 		'They are not going to the shop',
 		'It is late and they are hungry. The only question that matters is whether this can be ' +
-			'cooked right now with what is listed. Assume a poorly stocked first apartment: salt, ' +
-			'oil and a few basic spices are probably around even if unmentioned. Assume nothing specialised.',
+			'cooked right now with what is listed. Assume nothing specialised beyond it.',
+	);
+
+	q.addInstruction(
+		'Do not answer yes over the top of a real problem',
+		'canCookTonight is false whenever something the dish genuinely needs is missing and has ' +
+			'no workable stand-in. A verdict of "yes, but there is no salt and use yogurt instead ' +
+			'of cream" is not a yes — it is a no wearing a yes, and the person reading it is about ' +
+			'to cook a bad dinner on your say-so. If the honest answer is that it will be edible ' +
+			'but noticeably worse, say that plainly in verdict and lead with the compromise rather ' +
+			'than the permission.',
 	);
 
 	q.addInstruction(
