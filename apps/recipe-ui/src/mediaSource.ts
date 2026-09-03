@@ -264,29 +264,69 @@ async function resolveTikTok(raw: string): Promise<ResolveOutcome> {
 	return { kind: 'text', source, text: caption, thin: caption.length < 140 };
 }
 
+/**
+ * YouTube, via the resolver's transcript path.
+ *
+ * The browser cannot do this alone. oEmbed is the only endpoint reachable from
+ * here and it yields the title and nothing else: the description is unreachable
+ * because the player API returns 403 whenever an Origin header is present, and
+ * the caption endpoint now serves zero bytes to an unauthenticated request. The
+ * video itself is on googlevideo.com, which sends no permissive CORS header, so
+ * unlike Instagram there is no direct download to fall back on.
+ *
+ * So the resolver fetches the spoken transcript server-side. That makes YouTube
+ * a text source rather than a media one — no frames, no OCR, no vision — and
+ * the warning says as much, because a quantity shown only in an overlay will
+ * not be in here.
+ */
 async function resolveYouTube(raw: string): Promise<ResolveOutcome> {
 	const canonicalUrl = stripTracking(parseUrl(raw)).toString();
-	const data = (await getJson(
-		`https://www.youtube.com/oembed?url=${encodeURIComponent(canonicalUrl)}&format=json`,
-		RESOLVER_TIMEOUT_MS,
-	)) as OEmbed;
 
-	const title = (data.title ?? '').trim();
-	if (!title) throw new ResolveError('no-media', 'Could not read anything from that YouTube link.');
+	if (!RESOLVER_ENDPOINT) {
+		throw new ResolveError(
+			'not-configured',
+			'YouTube links need the resolver service, which is not configured yet. ' +
+				'Paste the recipe text below, or save the video and drop it in.',
+		);
+	}
+
+	const data = (await getJson(RESOLVER_ENDPOINT, RESOLVER_TIMEOUT_MS, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify({ url: canonicalUrl }),
+	})) as {
+		title?: string;
+		transcript?: string;
+		durationSeconds?: number;
+		resolverConfidence?: MediaSource['resolverConfidence'];
+		warnings?: string[];
+		error?: string;
+		code?: ResolveErrorCode;
+	};
+
+	if (data?.error) throw new ResolveError(data.code ?? 'resolver-empty', data.error);
+
+	const transcript = (data.transcript ?? '').trim();
+	if (!transcript) {
+		throw new ResolveError(
+			'no-media',
+			'That video has no captions to read, and YouTube does not allow the video itself to be ' +
+				'downloaded here. Save the video and drop it in instead.',
+		);
+	}
 
 	const source: MediaSource = {
 		platform: 'youtube',
 		originalUrl: raw,
 		canonicalUrl,
-		caption: title,
-		thumbnailUrl: data.thumbnail_url,
-		resolverConfidence: 'low',
-		warnings: [
-			'YouTube only gives the video title here, never the description where the recipe usually is. ' +
-				'Expect a rough result.',
-		],
+		caption: data.title?.trim() || undefined,
+		durationSeconds: data.durationSeconds,
+		resolverConfidence: data.resolverConfidence ?? 'medium',
+		warnings: data.warnings ?? [],
 	};
-	return { kind: 'text', source, text: title, thin: true };
+	// A real read of what the cook said, so it is held to the same bar as any
+	// other transcript rather than flagged thin on principle.
+	return { kind: 'text', source, text: transcript, thin: transcript.length < 400 };
 }
 
 function normalise(

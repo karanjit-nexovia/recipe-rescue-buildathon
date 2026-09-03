@@ -79,6 +79,105 @@ function canonicaliseInstagram(raw) {
 	return { canonicalUrl: `https://www.instagram.com/reel/${m[2]}/`, shortcode: m[2] };
 }
 
+/**
+ * Accept a single YouTube video, Short, or youtu.be link.
+ *
+ * Same rule as Instagram: refuse anything that is not one known post shape
+ * before making an outbound request. Channels, playlists, searches and every
+ * other host are rejected here.
+ */
+function canonicaliseYouTube(raw) {
+	if (typeof raw !== 'string' || !raw.trim()) return { error: 'Provide a url.', code: 'empty' };
+
+	let url;
+	try {
+		url = new URL(raw.trim());
+	} catch {
+		return { error: 'That is not a valid URL.', code: 'invalid-url' };
+	}
+	if (url.protocol !== 'https:') return { error: 'Only https links are accepted.', code: 'invalid-url' };
+
+	const host = url.hostname.replace(/^(www\.|m\.)/i, '').toLowerCase();
+	const ID = /^[A-Za-z0-9_-]{11}$/;
+	let id = '';
+
+	if (host === 'youtu.be') {
+		id = url.pathname.slice(1).split('/')[0];
+	} else if (host === 'youtube.com') {
+		const shorts = url.pathname.match(/^\/shorts\/([A-Za-z0-9_-]{11})/);
+		if (shorts) id = shorts[1];
+		else if (url.pathname === '/watch') id = url.searchParams.get('v') ?? '';
+		else if (url.pathname.startsWith('/embed/')) id = url.pathname.slice(7).split('/')[0];
+	} else {
+		return { error: 'Only YouTube links are supported here.', code: 'wrong-host' };
+	}
+
+	if (!ID.test(id)) return { error: 'That is not a single YouTube video URL.', code: 'not-a-post' };
+	return { canonicalUrl: `https://www.youtube.com/watch?v=${id}`, shortcode: id };
+}
+
+const YOUTUBE_TRANSCRIPT_ACTOR = 'pintostudio~youtube-transcript-scraper';
+
+async function callApifyYouTube(canonicalUrl, token) {
+	const controller = new AbortController();
+	const timer = setTimeout(() => controller.abort(), APIFY_TIMEOUT_MS);
+	try {
+		return await fetch(
+			`https://api.apify.com/v2/acts/${YOUTUBE_TRANSCRIPT_ACTOR}/run-sync-get-dataset-items`,
+			{
+				method: 'POST',
+				signal: controller.signal,
+				headers: {
+					Authorization: `Bearer ${token}`,
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({ videoUrl: canonicalUrl }),
+			},
+		);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+/**
+ * Flatten the actor's cue list into readable prose.
+ *
+ * Auto-generated captions arrive as overlapping ~3-second windows, and
+ * consecutive cues frequently repeat a trailing word or two where the windows
+ * overlap. Left alone that stutter reaches the model as though the cook said
+ * everything twice, so drop a cue's leading words when they simply continue
+ * the previous one.
+ */
+function joinTranscript(cues) {
+	const parts = [];
+	for (const cue of cues) {
+		const text = String(cue?.text ?? '')
+			.replace(/\s+/g, ' ')
+			.trim();
+		if (!text) continue;
+		const prev = parts[parts.length - 1];
+		if (prev && prev.toLowerCase().endsWith(text.toLowerCase())) continue;
+		parts.push(text);
+	}
+	return parts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Title only, and never fatal — the transcript is what matters. */
+async function youtubeTitle(canonicalUrl) {
+	try {
+		const res = await fetch(
+			`https://www.youtube.com/oembed?url=${encodeURIComponent(canonicalUrl)}&format=json`,
+			{ signal: AbortSignal.timeout(8000) },
+		);
+		if (!res.ok) return undefined;
+		const data = await res.json();
+		const t = typeof data?.title === 'string' ? data.title.trim() : '';
+		return t || undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 /** Apify field names drift between actors; accept the known aliases. */
 function pick(item, names) {
 	for (const n of names) {
@@ -134,6 +233,80 @@ export default {
 			body = await request.json();
 		} catch {
 			return fail('invalid-url', 'Send a JSON body of {"url": "..."}.', 400, cors);
+		}
+
+		// Route by host before validating, so each platform gets the error
+		// message that fits it rather than "only Instagram links are supported".
+		const rawUrl = typeof body?.url === 'string' ? body.url.trim() : '';
+		const isYouTube = /(^|\/\/)(www\.|m\.)?(youtube\.com|youtu\.be)\//i.test(rawUrl);
+
+		if (isYouTube) {
+			const yt = canonicaliseYouTube(rawUrl);
+			if (yt.error) return fail(yt.code, yt.error, 400, cors);
+
+			let ytRes;
+			try {
+				ytRes = await callApifyYouTube(yt.canonicalUrl, env.APIFY_TOKEN);
+			} catch (err) {
+				const timedOut = err?.name === 'AbortError';
+				return fail(
+					timedOut ? 'resolver-timeout' : 'network',
+					timedOut
+						? 'YouTube took too long to respond. Try again.'
+						: 'Could not reach the scraping service.',
+					504,
+					cors,
+				);
+			}
+			if (ytRes.status === 401 || ytRes.status === 403) {
+				return fail('resolver-auth', 'The resolver could not authenticate with its scraping service.', 502, cors);
+			}
+			if (!ytRes.ok) return fail('network', `The scraping service returned ${ytRes.status}.`, 502, cors);
+
+			let ytItems;
+			try {
+				ytItems = await ytRes.json();
+			} catch {
+				return fail('resolver-empty', 'The scraping service returned an unreadable response.', 502, cors);
+			}
+
+			// Shape: [{ data: [{ start, dur, text }, ...] }]
+			const cues = Array.isArray(ytItems?.[0]?.data) ? ytItems[0].data : [];
+			const transcript = joinTranscript(cues);
+			const title = await youtubeTitle(yt.canonicalUrl);
+
+			if (!transcript) {
+				return fail(
+					'no-media',
+					'That video has no captions to read, and YouTube does not allow the video itself to be downloaded here. Save the video and drop it in instead.',
+					404,
+					cors,
+				);
+			}
+
+			const lastCue = cues[cues.length - 1];
+			const durationSeconds =
+				lastCue && Number.isFinite(Number(lastCue.start))
+					? Math.round(Number(lastCue.start) + Number(lastCue.dur ?? 0))
+					: undefined;
+
+			return json(
+				{
+					platform: 'youtube',
+					canonicalUrl: yt.canonicalUrl,
+					title,
+					// The spoken track, not a written caption — the client shows it
+					// as a real read of the video rather than a thin title.
+					transcript,
+					durationSeconds,
+					resolverConfidence: transcript.length >= 400 ? 'high' : 'medium',
+					warnings: [
+						'Read from the spoken audio. Anything shown only on screen — a quantity in an overlay — was not seen.',
+					],
+				},
+				200,
+				cors,
+			);
 		}
 
 		const check = canonicaliseInstagram(body?.url);

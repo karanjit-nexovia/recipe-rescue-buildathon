@@ -344,6 +344,13 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 								'That link gave only a short caption, not a full recipe. Expect a rough result — ' +
 									'pasting the full caption or dropping the video in gives a much better one.',
 							);
+						} else if (outcome.source.warnings.length) {
+							// The resolver knows what it could not see — YouTube gives the
+							// spoken track but no frames, so a quantity that only ever
+							// appeared in an overlay is missing. That caveat was being
+							// computed and thrown away; the reader needs it to know which
+							// parts of the recipe to double-check.
+							setNotice(outcome.source.warnings.join(' '));
 						}
 					} else {
 						setBusy('Retrieving the video');
