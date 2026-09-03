@@ -47,6 +47,15 @@ const VIDEO_RE = /\.(mp4|mov|m4v|webm|avi|mkv)$/i;
  *  say it once at the top instead. */
 const MOSTLY_ESTIMATED = 0.6;
 
+/** Halving and doubling is what people actually do; anything finer is a slider
+ *  nobody asked for. Labels stay in the language of servings, not multipliers. */
+const SCALES: Array<[number, string]> = [
+	[0.5, 'Half'],
+	[1, '1x'],
+	[2, '2x'],
+	[3, '3x'],
+];
+
 type View = 'ingest' | 'recipe' | 'cook' | 'book';
 
 // =============================================================================
@@ -120,8 +129,6 @@ const s: Record<string, React.CSSProperties> = {
 	},
 
 	// --- cook mode ---------------------------------------------------------
-	cookStep: { fontSize: 19, lineHeight: 1.55, marginTop: 0, marginBottom: 4 },
-	timer: { fontSize: 52, fontWeight: 700, fontVariantNumeric: 'tabular-nums', letterSpacing: 1, lineHeight: 1.1 },
 	progressTrack: { height: 3, borderRadius: 2, background: 'var(--rr-bg-hover, rgba(128,128,128,0.2))', overflow: 'hidden', marginTop: 14 },
 	progressFill: { height: '100%', background: 'var(--rr-accent, #6b8afd)', transition: 'width 300ms linear' },
 };
@@ -194,6 +201,79 @@ const CSS = `
 .rx-caveats { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--rr-border-subtle, rgba(128,128,128,0.13)); }
 .rx-caveats ul { margin: 0; padding-left: 17px; }
 .rx-caveats li { font-size: 12.5px; line-height: 1.55; color: var(--rr-text-secondary); margin-bottom: 6px; }
+
+/* --- motion ------------------------------------------------------------- */
+@keyframes rx-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+.rx-in { animation: rx-in 280ms cubic-bezier(0.2,0.7,0.3,1) both; }
+.rx-in-2 { animation-delay: 70ms; }
+.rx-in-3 { animation-delay: 140ms; }
+@keyframes rx-pop { 0% { transform: scale(1); } 40% { transform: scale(1.18); } 100% { transform: scale(1); } }
+
+/* --- ticking things off -------------------------------------------------- */
+.rx-ing, .rx-step {
+  cursor: pointer; border-radius: 7px;
+  padding-left: 7px; padding-right: 7px; margin-left: -7px; margin-right: -7px;
+  transition: background 160ms ease, opacity 220ms ease;
+}
+.rx-ing:hover, .rx-step:hover { background: var(--rr-bg-hover, rgba(128,128,128,0.07)); }
+.rx-ing-name { display: flex; align-items: flex-start; }
+.rx-box {
+  width: 15px; height: 15px; border-radius: 4px; flex: none; margin: 2px 10px 0 0;
+  border: 1.5px solid var(--rr-border, rgba(128,128,128,0.45));
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; line-height: 1; color: transparent;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.is-done .rx-box { background: var(--rr-accent, #6b8afd); border-color: var(--rr-accent, #6b8afd); color: #fff; animation: rx-pop 260ms ease; }
+.rx-ing.is-done .rx-ing-qty, .rx-ing.is-done .rx-ing-name { opacity: 0.42; text-decoration: line-through; }
+.rx-step.is-done { opacity: 0.45; }
+.rx-step.is-done .rx-step-text { text-decoration: line-through; }
+
+.rx-progress { display: flex; align-items: center; gap: 11px; margin-bottom: 15px; }
+.rx-bar { flex: 1; height: 4px; border-radius: 3px; background: var(--rr-bg-hover, rgba(128,128,128,0.18)); overflow: hidden; }
+.rx-bar-fill { height: 100%; background: var(--rr-accent, #6b8afd); border-radius: 3px; transition: width 340ms cubic-bezier(0.2,0.7,0.3,1); }
+.rx-count { font-size: 12px; color: var(--rr-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* --- serving scaler ------------------------------------------------------ */
+.rx-scale { display: inline-flex; border: 1px solid var(--rr-border, rgba(128,128,128,0.35)); border-radius: 999px; overflow: hidden; }
+.rx-scale button {
+  appearance: none; background: transparent; border: 0; padding: 4px 12px;
+  font: inherit; font-size: 12px; color: var(--rr-text-secondary); cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+.rx-scale button:hover { background: var(--rr-bg-hover, rgba(128,128,128,0.12)); }
+.rx-scale button.is-on { background: var(--rr-accent, #6b8afd); color: #fff; }
+
+/* --- cook mode ----------------------------------------------------------- */
+.rx-cook { max-width: 700px; margin: 0 auto; }
+.rx-cook-step { font-size: 25px; line-height: 1.45; font-weight: 500; margin: 0 0 18px; }
+/* Here the accent border earns its keep: one cue on the screen, not thirteen. */
+.rx-cook-cue {
+  font-size: 15px; line-height: 1.55; color: var(--rr-text-secondary);
+  border-left: 3px solid var(--rr-accent, #6b8afd); padding-left: 13px; margin-bottom: 24px;
+}
+.rx-cook-cue b { color: var(--rr-text-primary); font-weight: 600; }
+.rx-timer { font-size: 58px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 1px; line-height: 1.05; }
+.rx-cook-ing { font-size: 13px; line-height: 1.6; color: var(--rr-text-secondary); margin-bottom: 22px; }
+.rx-cook-ing b { color: var(--rr-text-primary); font-weight: 600; }
+.rx-dots { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 24px; }
+.rx-dot {
+  width: 8px; height: 8px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
+  background: var(--rr-bg-hover, rgba(128,128,128,0.3));
+  transition: background 200ms ease, transform 200ms ease;
+}
+.rx-dot:hover { transform: scale(1.3); }
+.rx-dot.is-on { background: var(--rr-accent, #6b8afd); transform: scale(1.4); }
+.rx-dot.is-past { background: var(--rr-text-secondary); opacity: 0.45; }
+.rx-hint { font-size: 11.5px; color: var(--rr-text-secondary); opacity: 0.75; margin-top: 14px; }
+
+/* Respect the system setting rather than animating over someone who asked us
+   not to — motion sickness and vestibular disorders are real. */
+@media (prefers-reduced-motion: reduce) {
+  .rx-in { animation: none; }
+  .rx-dot, .rx-box, .rx-bar-fill, .rx-ing, .rx-step, .rx-scale button { transition-duration: 1ms; }
+  .is-done .rx-box { animation: none; }
+}
 `;
 
 // =============================================================================
@@ -219,6 +299,80 @@ const groupIngredients = (list: Ingredient[]): Array<{ name?: string; items: Ing
 	}
 	if (out.length === 1) out[0].name = undefined;
 	return out;
+};
+
+/**
+ * Rewrite the numbers in a quantity for a different number of servings.
+ *
+ * Quantities are free text a model wrote — "1.5–2 lbs (700-900 g)", "3/4 tsp",
+ * "1 large or 2 medium". So this rewrites every number it finds, which is right
+ * for a quantity string: both halves of a range scale, and so does the gram
+ * figure in the brackets.
+ *
+ * It is deliberately confined to ingredient quantities and never touches step
+ * text, where the numbers mean something else entirely — a 400°F oven and an
+ * 8x8 dish do not double because you are cooking for four.
+ *
+ * Where nothing parses, the text comes back untouched rather than mangled, and
+ * the caller marks the recipe as scaled so a reader knows the amounts are no
+ * longer the ones that were read off the video.
+ */
+const NUMBER_RE = /\d+\s+\d+\/\d+|\d+\/\d+|\d*\.\d+|\d+/g;
+
+/** Back to the fractions people actually measure with. "0.75 tsp" helps nobody. */
+const prettyAmount = (n: number): string => {
+	if (!Number.isFinite(n) || n <= 0) return '';
+	const rounded = Math.round(n * 1000) / 1000;
+	const whole = Math.floor(rounded);
+	const frac = rounded - whole;
+	const NEAR: Array<[number, string]> = [
+		[0.125, '1/8'],
+		[0.25, '1/4'],
+		[1 / 3, '1/3'],
+		[0.5, '1/2'],
+		[2 / 3, '2/3'],
+		[0.75, '3/4'],
+	];
+	if (frac < 0.02) return String(whole);
+	if (frac > 0.98) return String(whole + 1);
+	for (const [value, label] of NEAR) {
+		if (Math.abs(frac - value) < 0.03) return whole ? `${whole} ${label}` : label;
+	}
+	return String(Math.round(rounded * 10) / 10);
+};
+
+const scaleQuantity = (text: string, factor: number): string => {
+	if (factor === 1 || !text) return text;
+	return text.replace(NUMBER_RE, (match) => {
+		const mixed = /^(\d+)\s+(\d+)\/(\d+)$/.exec(match);
+		const fraction = /^(\d+)\/(\d+)$/.exec(match);
+		let value: number;
+		if (mixed) value = Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3]);
+		else if (fraction) value = Number(fraction[1]) / Number(fraction[2]);
+		else value = Number(match);
+		if (!Number.isFinite(value) || value === 0) return match;
+		return prettyAmount(value * factor) || match;
+	});
+};
+
+/**
+ * Which ingredients a step actually uses, by name match.
+ *
+ * Only used in cook mode, where the ingredient list is not on screen and the
+ * step says "add the spices" without saying which. A miss costs nothing — the
+ * line is simply not shown — so a cheap match beats asking a model for a
+ * mapping and paying for it on every recipe.
+ */
+const stepIngredients = (step: Step, ingredients: Ingredient[]): Ingredient[] => {
+	const text = (step.instruction ?? '').toLowerCase();
+	if (!text) return [];
+	return ingredients.filter((ing) => {
+		const name = ing.item?.toLowerCase().replace(/\(.*?\)/g, '').trim();
+		if (!name || name.length < 3) return false;
+		// Match the head noun: "Fresh ginger" should hit "grate the ginger".
+		const head = name.split(/\s+/).filter((w) => w.length > 2);
+		return head.some((word) => text.includes(word));
+	});
 };
 
 const mmss = (secs: number): string => {
@@ -358,6 +512,68 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 	const [fridge, setFridge] = useState('');
 	const [sub, setSub] = useState<Substitution | null>(null);
 	const [savedId, setSavedId] = useState<string | null>(null);
+
+	// --- cooking progress ---------------------------------------------------
+	// Lives here rather than in RecipeView because RecipeView unmounts when you
+	// switch to cook mode, and losing your ticks on the way to the stove would
+	// defeat the point of having them.
+	const recipeKey = useMemo(
+		() =>
+			recipe
+				? `${recipe.title ?? 'untitled'}|${recipe.steps?.length ?? 0}|${recipe.ingredients?.length ?? 0}`
+				: '',
+		[recipe],
+	);
+	const [scale, setScale] = useState(1);
+	const [doneIng, setDoneIng] = useState<number[]>([]);
+	const [doneStep, setDoneStep] = useState<number[]>([]);
+
+	// Progress belongs to the recipe, not the session: reopening the one you
+	// were halfway through should not hand you a blank page. Keyed on the recipe
+	// alone — appState changes on every save, and re-reading here on that would
+	// fight the user's own taps.
+	useEffect(() => {
+		setScale(1);
+		const store = (appState as { progress?: Record<string, { ing?: unknown; step?: unknown }> } | undefined)
+			?.progress;
+		const mine = recipeKey ? store?.[recipeKey] : undefined;
+		const nums = (v: unknown): number[] =>
+			Array.isArray(v) ? v.filter((n): n is number => typeof n === 'number') : [];
+		setDoneIng(nums(mine?.ing));
+		setDoneStep(nums(mine?.step));
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [recipeKey]);
+
+	const persistProgress = useCallback(
+		(ing: number[], step: number[]) => {
+			if (!recipeKey) return;
+			updateAppState((prev) => ({
+				...prev,
+				progress: { ...((prev.progress as Record<string, unknown>) ?? {}), [recipeKey]: { ing, step } },
+			}));
+		},
+		[recipeKey, updateAppState],
+	);
+
+	const toggleIng = useCallback(
+		(i: number) =>
+			setDoneIng((prev) => {
+				const next = prev.includes(i) ? prev.filter((n) => n !== i) : [...prev, i];
+				persistProgress(next, doneStep);
+				return next;
+			}),
+		[doneStep, persistProgress],
+	);
+
+	const toggleStep = useCallback(
+		(i: number) =>
+			setDoneStep((prev) => {
+				const next = prev.includes(i) ? prev.filter((n) => n !== i) : [...prev, i];
+				persistProgress(doneIng, next);
+				return next;
+			}),
+		[doneIng, persistProgress],
+	);
 
 	const go = useCallback((next: string) => {
 		setError(null);
@@ -732,6 +948,12 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 								busy={!!busy}
 								onSubstitute={() => void runSubstitute()}
 							onCookAlternative={() => void runCookAlternative()}
+							doneIng={doneIng}
+							doneStep={doneStep}
+							onToggleIng={toggleIng}
+							onToggleStep={toggleStep}
+							scale={scale}
+							onScale={setScale}
 								onSave={saveRecipe}
 								isSaved={alreadySaved}
 								canSave={loaded}
@@ -747,7 +969,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 
 					{view === 'cook' &&
 						(recipe?.steps?.length ? (
-							<CookView recipe={recipe} />
+							<CookView recipe={recipe} doneStep={doneStep} onToggleStep={toggleStep} />
 						) : (
 							<EmptyState title="Nothing to cook yet" description="Build a recipe first." />
 						))}
@@ -865,6 +1087,12 @@ interface RecipeViewProps {
 	onCook: () => void;
 	/** Build a recipe for the dish the substitution suggested instead. */
 	onCookAlternative: () => void;
+	doneIng: number[];
+	doneStep: number[];
+	onToggleIng: (i: number) => void;
+	onToggleStep: (i: number) => void;
+	scale: number;
+	onScale: (factor: number) => void;
 }
 
 const RecipeView: React.FC<RecipeViewProps> = ({
@@ -875,6 +1103,12 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 	busy,
 	onSubstitute,
 	onCookAlternative,
+	doneIng,
+	doneStep,
+	onToggleIng,
+	onToggleStep,
+	scale,
+	onScale,
 	onSave,
 	isSaved,
 	canSave,
@@ -951,7 +1185,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 					</div>
 				}
 			>
-				<div className="rx-head">
+				<div className="rx-head rx-in">
 					<div className="rx-chips">
 						{chips.length ? (
 							chips.map((c, i) => (
@@ -972,22 +1206,81 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 				{estimateNote && <Banner variant="warning">{estimateNote}</Banner>}
 
 				<div className="rx-split">
-					<aside className="rx-aside">
+					<aside className="rx-aside rx-in rx-in-2">
 						<div className="rx-label">Ingredients</div>
+
+						{ingredients.length > 0 && (
+							<>
+								{recipe.servings ? (
+									<div style={{ ...s.row, marginBottom: 14, justifyContent: 'space-between' }}>
+										<span style={{ fontSize: 12, color: 'var(--rr-text-secondary)' }}>
+											Serves {Math.round(recipe.servings * scale)}
+										</span>
+										<span className="rx-scale">
+											{SCALES.map(([factor, label]) => (
+												<button
+													key={label}
+													type="button"
+													className={scale === factor ? 'is-on' : undefined}
+													onClick={() => onScale(factor)}
+												>
+													{label}
+												</button>
+											))}
+										</span>
+									</div>
+								) : null}
+
+								<div className="rx-progress">
+									<div className="rx-bar">
+										<div
+											className="rx-bar-fill"
+											style={{ width: `${(doneIng.length / ingredients.length) * 100}%` }}
+										/>
+									</div>
+									<span className="rx-count">
+										{doneIng.length}/{ingredients.length} out
+									</span>
+								</div>
+							</>
+						)}
+
 						{ingredients.length ? (
 							grouped.map((g, gi) => (
 								<div className="rx-group" key={gi}>
 									{g.name && <div className="rx-group-name">{g.name}</div>}
-									{g.items.map((ing, i) => (
-										<div className="rx-ing" key={i}>
-											<div className="rx-ing-name">
-												{ing.item ?? '—'}
-												{ing.inferred && !mostlyEstimated && <span className="rx-est">est</span>}
+									{g.items.map((ing) => {
+										const i = ingredients.indexOf(ing);
+										const done = doneIng.includes(i);
+										return (
+											<div
+												className={`rx-ing${done ? ' is-done' : ''}`}
+												key={i}
+												onClick={() => onToggleIng(i)}
+												role="checkbox"
+												aria-checked={done}
+												tabIndex={0}
+												onKeyDown={(e) => {
+													if (e.key === 'Enter' || e.key === ' ') {
+														e.preventDefault();
+														onToggleIng(i);
+													}
+												}}
+											>
+												<div className="rx-ing-name">
+													<span className="rx-box">✓</span>
+													<span>
+														{ing.item ?? '—'}
+														{ing.inferred && !mostlyEstimated && <span className="rx-est">est</span>}
+													</span>
+												</div>
+												<div className="rx-ing-qty">
+													{ing.quantity ? scaleQuantity(ing.quantity, scale) : '—'}
+												</div>
+												{ing.note && <div className="rx-ing-note">{ing.note}</div>}
 											</div>
-											<div className="rx-ing-qty">{ing.quantity ?? '—'}</div>
-											{ing.note && <div className="rx-ing-note">{ing.note}</div>}
-										</div>
-									))}
+										);
+									})}
 								</div>
 							))
 						) : (
@@ -995,10 +1288,33 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 						)}
 					</aside>
 
-					<section>
+					<section className="rx-in rx-in-3">
 						<div className="rx-label">Method</div>
+
+						{!!recipe.steps?.length && (
+							<div className="rx-progress">
+								<div className="rx-bar">
+									<div
+										className="rx-bar-fill"
+										style={{ width: `${(doneStep.length / recipe.steps.length) * 100}%` }}
+									/>
+								</div>
+								<span className="rx-count">
+									{doneStep.length}/{recipe.steps.length} done
+								</span>
+							</div>
+						)}
+
 						{recipe.steps?.length ? (
-							recipe.steps.map((st, i) => <StepRow key={i} step={st} index={i} />)
+							recipe.steps.map((st, i) => (
+								<StepRow
+									key={i}
+									step={st}
+									index={i}
+									done={doneStep.includes(i)}
+									onToggle={() => onToggleStep(i)}
+								/>
+							))
 						) : (
 							<p style={s.muted}>No steps could be read from this one.</p>
 						)}
@@ -1120,12 +1436,36 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 	);
 };
 
-const StepRow: React.FC<{ step: Step; index: number }> = ({ step, index }) => (
-	<div className="rx-step">
-		<div className="rx-step-n">{step.n ?? index + 1}</div>
+const StepRow: React.FC<{ step: Step; index: number; done: boolean; onToggle: () => void }> = ({
+	step,
+	index,
+	done,
+	onToggle,
+}) => (
+	<div
+		className={`rx-step${done ? ' is-done' : ''}`}
+		onClick={onToggle}
+		role="checkbox"
+		aria-checked={done}
+		tabIndex={0}
+		onKeyDown={(e) => {
+			if (e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				onToggle();
+			}
+		}}
+	>
+		<div className="rx-step-n">
+			<span className="rx-box">✓</span>
+		</div>
 		<div>
 			<div className="rx-step-top">
-				<div className="rx-step-text">{step.instruction ?? ''}</div>
+				<div className="rx-step-text">
+					<b style={{ color: 'var(--rr-text-secondary)', fontWeight: 700, marginRight: 8 }}>
+						{step.n ?? index + 1}
+					</b>
+					{step.instruction ?? ''}
+				</div>
 				{!!step.minutes && <div className="rx-step-time">{step.minutes} min</div>}
 			</div>
 			{step.doneWhen && (
@@ -1154,7 +1494,11 @@ const SubRow: React.FC<{ line: SubLine }> = ({ line }) => (
 // COOK — timers are pure client state; no model call at cook time.
 // =============================================================================
 
-const CookView: React.FC<{ recipe: Recipe }> = ({ recipe }) => {
+const CookView: React.FC<{
+	recipe: Recipe;
+	doneStep: number[];
+	onToggleStep: (i: number) => void;
+}> = ({ recipe, doneStep, onToggleStep }) => {
 	const steps = recipe.steps ?? [];
 	const [index, setIndex] = useState(0);
 	const [left, setLeft] = useState<number | null>(null);
@@ -1162,6 +1506,23 @@ const CookView: React.FC<{ recipe: Recipe }> = ({ recipe }) => {
 
 	const step = steps[Math.min(index, steps.length - 1)];
 	const total = (step?.minutes ?? 0) * 60;
+	const needed = useMemo(
+		() => (step ? stepIngredients(step, recipe.ingredients ?? []) : []),
+		[step, recipe.ingredients],
+	);
+
+	// Hands are busy and often wet. Arrow keys and space are reachable with a
+	// knuckle; hunting for a small button is not.
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			const typing = (e.target as HTMLElement | null)?.tagName;
+			if (typing === 'INPUT' || typing === 'TEXTAREA') return;
+			if (e.key === 'ArrowRight') setIndex((i) => Math.min(i + 1, steps.length - 1));
+			if (e.key === 'ArrowLeft') setIndex((i) => Math.max(i - 1, 0));
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	}, [steps.length]);
 
 	const stop = useCallback(() => {
 		if (tick.current) clearInterval(tick.current);
@@ -1210,19 +1571,39 @@ const CookView: React.FC<{ recipe: Recipe }> = ({ recipe }) => {
 				</div>
 			}
 		>
-			<p style={s.cookStep}>{step.instruction}</p>
+			<div className="rx-cook">
+				<p className="rx-cook-step rx-in" key={`t${index}`}>
+					{step.instruction}
+				</p>
 
-			{step.doneWhen && (
-				<div style={s.doneWhen}>
-					<strong>Ready when: </strong>
-					{step.doneWhen}
-				</div>
-			)}
+				{step.doneWhen && (
+					<div className="rx-cook-cue rx-in rx-in-2" key={`c${index}`}>
+						<b>Ready when</b> {step.doneWhen}
+					</div>
+				)}
+
+				{/* The ingredient list is a whole screen away in cook mode, and a
+				    step that says "add the spices" is no use without the amounts. */}
+				{!!needed.length && (
+					<div className="rx-cook-ing rx-in rx-in-2" key={`i${index}`}>
+						{needed.map((ing, i) => (
+							<span key={i}>
+								{i > 0 && ' · '}
+								<b>{ing.item}</b>
+								{ing.quantity ? ` ${ing.quantity}` : ''}
+							</span>
+						))}
+					</div>
+				)}
+			</div>
 
 			{!!step.minutes && (
 				<div style={{ marginTop: 22 }}>
 					<div style={s.row}>
-						<span style={{ ...s.timer, color: left === 0 ? 'var(--rr-accent, #6b8afd)' : undefined }}>
+						<span
+								className="rx-timer"
+								style={{ color: left === 0 ? 'var(--rr-accent, #6b8afd)' : undefined }}
+							>
 							{mmss(left === null ? total : left)}
 						</span>
 						{left === null ? (
@@ -1251,6 +1632,40 @@ const CookView: React.FC<{ recipe: Recipe }> = ({ recipe }) => {
 					)}
 				</div>
 			)}
+
+			<div className="rx-cook">
+				<div style={{ ...s.row, marginTop: 26 }}>
+					<Button
+						variant={doneStep.includes(index) ? 'secondary' : undefined}
+						onClick={() => {
+							onToggleStep(index);
+							// Ticking a step off is almost always followed by moving to
+							// the next one, so save the second tap — but never skip past
+							// the end, and never advance when un-ticking.
+							if (!doneStep.includes(index) && index < steps.length - 1) {
+								setIndex(index + 1);
+							}
+						}}
+					>
+						{doneStep.includes(index) ? 'Done — tap to undo' : 'Mark done'}
+					</Button>
+				</div>
+
+				{/* Where you are, and how much is left, without counting. */}
+				<div className="rx-dots">
+					{steps.map((_, i) => (
+						<button
+							key={i}
+							type="button"
+							aria-label={`Step ${i + 1}`}
+							className={`rx-dot${i === index ? ' is-on' : doneStep.includes(i) ? ' is-past' : ''}`}
+							onClick={() => setIndex(i)}
+						/>
+					))}
+				</div>
+
+				<div className="rx-hint">Arrow keys move between steps.</div>
+			</div>
 		</Card>
 	);
 };
