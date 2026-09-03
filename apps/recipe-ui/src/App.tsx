@@ -206,7 +206,7 @@ const SUB_VARIANT: Record<string, 'success' | 'warning' | 'error'> = {
 // =============================================================================
 
 const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
-	const { transcribe, describeFrames, extractRecipe, checkFridge } = usePipelines();
+	const { transcribe, describeFrames, extractRecipe, checkFridge, cookAlternative } = usePipelines();
 	const { appState, updateAppState, loaded } = useWorkspace() as {
 		appState: { saved?: SavedRecipe[] } | undefined;
 		updateAppState: (fn: (prev: Record<string, unknown>) => Record<string, unknown>) => void;
@@ -483,6 +483,46 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 		}
 	}, [checkFridge, fridge, recipe]);
 
+	/**
+	 * Cook the fallback the substitution named instead.
+	 *
+	 * When the dish is impossible tonight, the app already works out what they
+	 * COULD make — and then left them holding a sentence with nothing to press.
+	 * This turns that sentence into a recipe.
+	 *
+	 * It replaces the recipe on screen, so it clears the substitution with it:
+	 * those swap lines were computed against the dish being navigated away from,
+	 * and leaving them under a different recipe would attach them to the wrong
+	 * one. savedId clears too — this is a new recipe, not an edit of a saved one.
+	 */
+	const runCookAlternative = useCallback(async () => {
+		const dish = sub?.alternative?.trim();
+		if (!dish || !fridge.trim() || inFlight.current) return;
+		inFlight.current = true;
+		setError(null);
+		setNotice(null);
+		setBusy('Writing that recipe for what you have');
+		try {
+			const parsed = await cookAlternative(dish, fridge);
+			if (!parsed.ingredients?.length && !parsed.steps?.length) {
+				throw new Error('That suggestion could not be turned into a recipe. Try describing what you have in a bit more detail.');
+			}
+			setRecipe(parsed);
+			setSub(null);
+			setSavedId(null);
+			setNotice(
+				'This one is not from a video — it was written for what you said is in your kitchen. ' +
+					'Every quantity is an estimate.',
+			);
+			setView('recipe');
+		} catch (err) {
+			setError(errText(err));
+		} finally {
+			inFlight.current = false;
+			setBusy(null);
+		}
+	}, [cookAlternative, fridge, sub]);
+
 	// ----------------------------------------------------------- recipe book
 
 	const saveRecipe = useCallback(() => {
@@ -557,6 +597,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 								sub={sub}
 								busy={!!busy}
 								onSubstitute={() => void runSubstitute()}
+							onCookAlternative={() => void runCookAlternative()}
 								onSave={saveRecipe}
 								isSaved={alreadySaved}
 								canSave={loaded}
@@ -688,6 +729,8 @@ interface RecipeViewProps {
 	 *  over seeded defaults and lose what is already persisted. */
 	canSave: boolean;
 	onCook: () => void;
+	/** Build a recipe for the dish the substitution suggested instead. */
+	onCookAlternative: () => void;
 }
 
 const RecipeView: React.FC<RecipeViewProps> = ({
@@ -697,6 +740,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 	sub,
 	busy,
 	onSubstitute,
+	onCookAlternative,
 	onSave,
 	isSaved,
 	canSave,
@@ -804,10 +848,15 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 								<SubRow key={i} line={ln} />
 							))}
 						</div>
-						{sub.alternative && (
+					{sub.alternative && (
 							<div style={{ ...s.doneWhen, marginTop: 14 }}>
 								<strong>Instead: </strong>
 								{sub.alternative}
+								<div style={{ marginTop: 10 }}>
+									<Button small disabled={busy} onClick={onCookAlternative}>
+										Cook this instead
+									</Button>
+								</div>
 							</div>
 						)}
 					</div>

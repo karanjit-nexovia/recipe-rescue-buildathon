@@ -215,6 +215,69 @@ export function buildExtractionQuestion(
 	return q;
 }
 
+/**
+ * Build the Question for the dish suggested when the original was impossible.
+ *
+ * This one is different in kind from extraction, and the difference matters.
+ * Every other recipe in this app is a reading of something a cook actually did
+ * on camera. This one has no video behind it at all — it is the model writing a
+ * recipe from its own knowledge of the dish, for the ingredients someone has
+ * tonight. The app's whole promise is that the reader can tell what came from
+ * the cook and what was inferred, so a recipe with no cook behind it has to say
+ * so in the recipe itself, not merely in the UI that launched it.
+ */
+export function buildAlternativeRecipeQuestion(
+	Question: new (opts?: Record<string, unknown>) => QuestionLike,
+	dish: string,
+	fridge: string,
+): QuestionLike {
+	const q = new Question({
+		expectJson: true,
+		role:
+			'You are a cooking teacher for someone who has just moved out and is cooking ' +
+			'for the first time. You write recipes a nervous beginner can actually follow, ' +
+			'using only what they already have. You answer only with JSON.',
+	});
+
+	q.addQuestion(
+		'Write a structured recipe for the dish described below, for someone cooking it tonight ' +
+			'with only the ingredients listed in their kitchen.',
+	);
+
+	q.addInstruction(
+		'Say plainly that this one did not come from a video',
+		'Every other recipe this app produces is read from a cooking reel. This one is not: ' +
+			'there is no video and no cook to quote, and you are writing it yourself. Make the ' +
+			'FIRST entry of missingInfo say exactly that — this recipe was not taken from a ' +
+			'video, it was written for the ingredients on hand — and set confidence to "low". ' +
+			'The reader must never be unable to tell which kind of recipe they are looking at.',
+	);
+
+	q.addInstruction(
+		'Use what they have, and say when something is assumed',
+		'Build the dish from the listed ingredients. You may assume salt, oil, water and a few ' +
+			'basic spices in any kitchen; assume nothing else. If you use something that was not ' +
+			'listed, set inferred to true on that ingredient and note the assumption. Do not ' +
+			'produce a recipe that needs a shop trip — the entire point is that this is what they ' +
+			'can cook tonight.',
+	);
+
+	q.addInstruction(
+		'Every quantity concrete, every risky step cued',
+		'No "a little" and no "to taste": give a beginner a real starting amount, with inferred ' +
+			'true since these are your numbers rather than a cook\'s. Fill doneWhen with what the ' +
+			'step looks, smells or sounds like when it is ready. Keep it simple — this is a ' +
+			'fallback dinner for someone who has already been told they cannot make what they ' +
+			'wanted, not a project.',
+	);
+
+	q.addExample('A reel about jeera aloo', RECIPE_EXAMPLE);
+	q.addContext(`THE DISH TO WRITE:\n${dish.trim()}`);
+	q.addContext(`WHAT IS IN MY KITCHEN:\n${fridge.trim()}`);
+
+	return q;
+}
+
 /** Build the Question that checks a recipe against what is in someone's kitchen. */
 export function buildSubstitutionQuestion(
 	Question: new (opts?: Record<string, unknown>) => QuestionLike,

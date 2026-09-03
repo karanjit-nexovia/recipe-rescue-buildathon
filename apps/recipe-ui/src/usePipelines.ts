@@ -1,11 +1,13 @@
 // =============================================================================
-// Pipeline lifecycle and the two calls the app makes.
+// Pipeline lifecycle and the calls the app makes.
 //
-// Two pipelines:
+// Three pipelines, but only one of them reasons:
 //   transcribe — media in, text out. No LLM, so a run costs nothing.
+//   vision     — frames described by an image model. Escalated ONLY when
+//                transcription and OCR together come back near-empty.
 //   ask        — one generic chat pipeline. All prompting lives in the
 //                Question object (see prompts.ts), so a single pipeline
-//                serves both extraction and substitution.
+//                serves extraction, substitution, and the fallback dish.
 //
 // client.use() is expensive, so each is started once per session and its
 // token reused. Config changes apply at task start only, so editing a .pipe
@@ -19,7 +21,11 @@ import { useShellConnection } from 'shell';
 import transcribePipe from './transcribe.pipe';
 import askPipe from './ask.pipe';
 import visionPipe from './vision.pipe';
-import { buildExtractionQuestion, buildSubstitutionQuestion } from './prompts';
+import {
+	buildAlternativeRecipeQuestion,
+	buildExtractionQuestion,
+	buildSubstitutionQuestion,
+} from './prompts';
 import { firstAnswer, extractJson } from './parse';
 import type { Recipe, Substitution } from './types';
 
@@ -249,5 +255,13 @@ export function usePipelines() {
 		[ask],
 	);
 
-	return { client, isConnected, transcribe, describeFrames, extractRecipe, checkFridge };
+	/** Write the fallback dish the substitution suggested. No video behind this
+	 *  one, which is why the prompt makes it declare that in the recipe. */
+	const cookAlternative = useCallback(
+		(dish: string, fridge: string) =>
+			ask<Recipe>((Q) => buildAlternativeRecipeQuestion(Q as never, dish, fridge)),
+		[ask],
+	);
+
+	return { client, isConnected, transcribe, describeFrames, extractRecipe, checkFridge, cookAlternative };
 }
