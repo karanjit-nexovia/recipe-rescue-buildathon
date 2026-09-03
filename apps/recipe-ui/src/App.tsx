@@ -1836,6 +1836,29 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 							mostlyEstimated={mostlyEstimated}
 						/>
 						)}
+
+						{/* Opening a saved recipe lands here, where the list is tickable
+						    and, until now, ticking did nothing at all — no button, no
+						    re-check, just a control that moved and changed nothing.
+						    Unticking something is a statement that you have run out, so
+						    it needs to lead somewhere.
+
+						    Deliberately worded as unticked rather than missing: a recipe
+						    opened from the book starts with only the pantry basics ticked,
+						    which means the question has not been answered yet, not that
+						    twelve things are absent from the kitchen. */}
+						{stage === 'recipe' && lacking.length > 0 && (
+							<div className="rx-panel">
+								<p style={{ ...s.muted, marginTop: 0, marginBottom: 10 }}>
+									{lacking.length} {lacking.length === 1 ? 'ingredient is' : 'ingredients are'} not
+									ticked. Check whether you can still make this tonight?
+								</p>
+								<Button small disabled={busy || haveCount === 0} onClick={onSubstitute}>
+									{sub ? 'Check again' : 'Check what I can make'}
+								</Button>
+							</div>
+						)}
+
 						{stage === 'verdict' && sub && (
 						<div className="rx-panel">
 							<div className="rx-label">Can you make this tonight?</div>
