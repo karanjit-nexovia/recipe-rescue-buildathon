@@ -195,6 +195,72 @@ const summarise = (r: Recipe, extra?: string): string =>
 		.filter(Boolean)
 		.join('  ·  ');
 
+// =============================================================================
+// SHOPPING
+// =============================================================================
+
+/**
+ * What to buy, derived rather than asked for.
+ *
+ * The fridge check has already worked out which ingredients are missing, and
+ * the recipe already holds their quantities. Joining the two costs nothing and
+ * returns instantly; sending it back to a model would spend five cents and
+ * thirty seconds to reproduce two lists we are already holding.
+ */
+export interface ShoppingItem {
+	item: string;
+	quantity?: string;
+	why?: string;
+}
+
+/** Loose match — the substitution names an ingredient in its own words, which
+ *  is rarely character-for-character what the recipe called it. */
+const sameIngredient = (a?: string, b?: string): boolean => {
+	const norm = (v: string) => v.toLowerCase().replace(/\(.*?\)/g, '').replace(/[^a-z ]/g, '').trim();
+	if (!a || !b) return false;
+	const x = norm(a);
+	const y = norm(b);
+	if (!x || !y) return false;
+	return x === y || x.includes(y) || y.includes(x);
+};
+
+const shoppingList = (recipe: Recipe, sub: Substitution): ShoppingItem[] =>
+	(sub.lines ?? [])
+		.filter((ln) => ln.status === 'missing' && ln.item?.trim())
+		.map((ln) => {
+			const match = recipe.ingredients?.find((ing) => sameIngredient(ing.item, ln.item));
+			return { item: ln.item!.trim(), quantity: match?.quantity, why: ln.tradeoff };
+		});
+
+/**
+ * Where to send someone for a wonton wrapper.
+ *
+ * A general supermarket is the wrong answer for half the dishes this app
+ * handles — the whole premise is people cooking the food they grew up eating,
+ * and the ingredient they are missing is usually the one a general store does
+ * not carry. So the search is aimed at the kind of shop that stocks it.
+ *
+ * This hands off to the maps app rather than pretending to know the nearest
+ * store: no location is collected, nothing is claimed about hours, stock or
+ * price, and the device answers "nearest" with information it already has.
+ */
+const STORE_HINTS: Array<[RegExp, string]> = [
+	[/indian|desi|punjabi|south asian|gujarati|bengali|kerala|masala|paneer|tikka/i, 'Indian grocery store'],
+	[/chinese|asian|japanese|korean|thai|vietnamese|dumpling|wonton|kimchi|miso|szechuan/i, 'Asian grocery store'],
+	[/mexican|latin|taqueria|tortilla|masa/i, 'Mexican grocery store'],
+	[/middle eastern|lebanese|turkish|persian|arab|sumac|tahini|kefta/i, 'Middle Eastern grocery store'],
+	[/greek|mediterranean/i, 'Mediterranean grocery store'],
+];
+
+const storeQuery = (recipe: Recipe, items: ShoppingItem[]): string => {
+	const hay = [recipe.cuisine, recipe.title, ...items.map((i) => i.item)].filter(Boolean).join(' ');
+	for (const [re, q] of STORE_HINTS) if (re.test(hay)) return q;
+	return 'grocery store';
+};
+
+const mapsUrl = (query: string): string =>
+	`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+
 const SUB_VARIANT: Record<string, 'success' | 'warning' | 'error'> = {
 	have: 'success',
 	substitute: 'warning',
@@ -755,6 +821,32 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 	// reel-shaped copy below would contradict the recipe's own first caveat.
 	const written = recipe.origin === 'kitchen';
 
+	// Shopping is derived from data already on screen, so it needs no request
+	// and no spinner — the panel is just hidden until asked for.
+	const [shopping, setShopping] = useState(false);
+	const [copied, setCopied] = useState(false);
+	const missing = useMemo(() => (sub ? shoppingList(recipe, sub) : []), [recipe, sub]);
+
+	// A new fridge answer invalidates the old list; leaving the panel open would
+	// show items worked out against the previous one.
+	useEffect(() => {
+		setShopping(false);
+		setCopied(false);
+	}, [sub]);
+
+	const copyList = useCallback(() => {
+		const text = missing.map((m) => (m.quantity ? `${m.item} — ${m.quantity}` : m.item)).join('\n');
+		// Clipboard access can be refused outright inside an embedded frame, and
+		// a rejected promise here must not take the panel down with it.
+		void navigator.clipboard
+			?.writeText(text)
+			.then(() => {
+				setCopied(true);
+				setTimeout(() => setCopied(false), 2000);
+			})
+			.catch(() => undefined);
+	}, [missing]);
+
 	return (
 		<div style={s.stack}>
 			<Card
@@ -855,15 +947,73 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 								<SubRow key={i} line={ln} />
 							))}
 						</div>
-					{sub.alternative && (
-							<div style={{ ...s.doneWhen, marginTop: 14 }}>
-								<strong>Instead: </strong>
-								{sub.alternative}
-								<div style={{ marginTop: 10 }}>
-									<Button small disabled={busy} onClick={onCookAlternative}>
-										Cook this instead
-									</Button>
+					{(missing.length > 0 || sub.alternative) && (
+							<div style={{ marginTop: 18 }}>
+								<div style={{ ...s.muted, marginBottom: 10 }}>
+									{missing.length > 0
+										? `You are missing ${missing.length} thing${missing.length > 1 ? 's' : ''}. Two ways forward:`
+										: 'Two ways forward:'}
 								</div>
+
+								<div style={s.row}>
+									{missing.length > 0 && (
+										<Button
+											small
+											variant={sub.alternative ? 'secondary' : undefined}
+											onClick={() => setShopping((v) => !v)}
+										>
+											{shopping ? 'Hide the shopping list' : 'Get it today — shopping list'}
+										</Button>
+									)}
+									{sub.alternative && (
+										<Button small disabled={busy} onClick={onCookAlternative}>
+											Cook something else tonight
+										</Button>
+									)}
+								</div>
+
+								{sub.alternative && (
+									<div style={{ ...s.doneWhen, marginTop: 12 }}>
+										<strong>Instead: </strong>
+										{sub.alternative}
+									</div>
+								)}
+
+								{shopping && missing.length > 0 && (
+									<div style={{ ...s.doneWhen, marginTop: 12 }}>
+										<strong>Buy these {missing.length}:</strong>
+										<div style={{ marginTop: 8 }}>
+											{missing.map((m, i) => (
+												<div key={i} style={s.ingRow}>
+													<div style={s.ingName}>{m.item}</div>
+													<div style={s.ingQty}>{m.quantity ?? '—'}</div>
+													{m.why && <div style={s.ingNote}>{m.why}</div>}
+												</div>
+											))}
+										</div>
+										<div style={{ ...s.row, marginTop: 12 }}>
+											<Button small variant="secondary" onClick={copyList}>
+												{copied ? 'Copied' : 'Copy the list'}
+											</Button>
+											{/* A handoff, not a claim: the maps app knows where the
+											    user is, so nothing here collects a location or
+											    asserts anything about stock, hours or price. */}
+											<a
+												href={mapsUrl(storeQuery(recipe, missing))}
+												target="_blank"
+												rel="noopener noreferrer"
+												style={{ fontSize: 13, color: 'var(--rr-accent, #6b8afd)' }}
+											>
+												Find a {storeQuery(recipe, missing).replace(' grocery store', '')} grocery
+												store near you
+											</a>
+										</div>
+										<p style={{ ...s.muted, marginTop: 10, marginBottom: 0 }}>
+											Everything else on the list above you already have, or can swap for
+											something you have.
+										</p>
+									</div>
+								)}
 							</div>
 						)}
 					</div>
