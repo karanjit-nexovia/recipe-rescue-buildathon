@@ -67,7 +67,16 @@ export function buildExtractionQuestion(
 	transcript: string,
 	screenText?: string,
 	scenes?: string,
+	/**
+	 * 'reel' means the text came off a video and the job is to read it.
+	 * 'described' means a person typed what they want to cook and the job is to
+	 * write it. These are different tasks and the same prompt cannot do both:
+	 * "extract, do not reconstruct" is correct for the first and produces a
+	 * recipe with no method at all for the second.
+	 */
+	source: 'reel' | 'described' = 'reel',
 ): QuestionLike {
+	const described = source === 'described';
 	const q = new Question({
 		expectJson: true,
 		role:
@@ -77,8 +86,30 @@ export function buildExtractionQuestion(
 	});
 
 	q.addQuestion(
-		'Turn the transcript below into a structured recipe. It is the audio from a short cooking reel.',
+		described
+			? 'Someone has told you what they want to cook. Write them the full recipe.'
+			: 'Turn the transcript below into a structured recipe. It is the audio from a short cooking reel.',
 	);
+
+	if (described) {
+		q.addInstruction(
+			'They are asking you to write it, not to read it',
+			'The text below is what this person told you — it might be a full recipe they pasted, ' +
+				'or it might be four words and the name of a dish their mum makes. Use everything ' +
+				'in it, and where it runs out, WRITE THE REST YOURSELF. A complete method is ' +
+				'required: never return an empty steps array because they did not describe the ' +
+				'technique, because describing the technique is the thing they came to you for. ' +
+				'Mark what you supplied with inferred true, and say in missingInfo which parts ' +
+				'were your standard version of the dish rather than theirs.',
+		);
+		q.addInstruction(
+			'There is no video here',
+			'Never write "the video", "the reel", "the cook" or "was not shown" — nothing was ' +
+				'filmed and nobody was watched. Refer to what THEY told you and what they did not. ' +
+				'"You did not say how spicy you like it" is right; "the video does not specify heat ' +
+				'level" is a claim about something that does not exist.',
+		);
+	}
 
 	q.addInstruction(
 		'Restore what the cook skipped',
@@ -118,15 +149,16 @@ export function buildExtractionQuestion(
 			'(jeera, haldi, dal) rather than translating them into something nobody says.',
 	);
 
-	q.addInstruction(
-		'Extract, do not reconstruct',
+	if (!described)
+		q.addInstruction(
+			'Extract, do not reconstruct',
 		'You are reading ONE specific cook\'s version of a dish, not writing your own. If the ' +
 			'source never names something, stay generic rather than inventing a specific: write ' +
 			'"pasta" not "fettuccine", "onion or shallot" not "1 small onion", "oil" not "olive oil". ' +
 			'Naming a specific the cook never mentioned is a factual error even when it sounds ' +
 			'plausible — the user believes you are telling them what was in the video. Do not add ' +
 			'ingredients or steps the source does not support just because the dish usually has them.',
-	);
+		);
 
 	q.addInstruction(
 		'totalMinutes is your estimate, not the creator\'s claim',

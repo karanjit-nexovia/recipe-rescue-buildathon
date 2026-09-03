@@ -870,7 +870,15 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 						? 'Building your recipe'
 						: 'No words in this reel — building the recipe from what the frames show',
 				);
-				const parsed = await extractRecipe(transcript, screenText, scenes);
+				// Describing a dish and reading a reel are different jobs, and the
+				// prompt has to know which one it is being asked to do.
+				const describedByUser = !payload.link && !payload.file && sourceMode === 'describe';
+				const parsed = await extractRecipe(
+					transcript,
+					screenText,
+					scenes,
+					describedByUser ? 'described' : 'reel',
+				);
 
 				// A recipe with neither ingredients nor steps is not a recipe, and
 				// the recipe view is the wrong place to say so: it offers "Start
@@ -889,7 +897,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 					);
 				}
 
-				setRecipe(parsed);
+				setRecipe({ ...parsed, origin: describedByUser ? 'described' : 'reel' });
 				setSavedId(null);
 				// Straight to "what have you got" rather than the method. The
 				// method is the last question, not the first.
@@ -901,7 +909,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 				setBusy(null);
 			}
 		},
-		[describeFrames, extractRecipe, readScreenText, transcribe],
+		[describeFrames, extractRecipe, readScreenText, sourceMode, transcribe],
 	);
 
 	/** DropZone never filters by type — the host validates. Do it before the
@@ -1679,7 +1687,11 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 	const mostlyEstimated = ingredients.length > 0 && estimatedCount / ingredients.length >= MOSTLY_ESTIMATED;
 	// A recipe written for someone's ingredients has no reel behind it, so the
 	// reel-shaped copy below would contradict the recipe's own first caveat.
-	const written = recipe.origin === 'kitchen';
+	// Anything we wrote rather than read. Old saved recipes carry no origin at
+	// all and were all reel readings, so an absent origin stays a reel.
+	const written = recipe.origin === 'kitchen' || recipe.origin === 'described';
+	/** Written for the ingredients on hand, as opposed to from a dish they named. */
+	const fromKitchen = recipe.origin === 'kitchen';
 
 	const grouped = useMemo(() => groupIngredients(ingredients), [ingredients]);
 
@@ -1707,7 +1719,9 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 			: 'The cook never gave amounts, so every quantity is a sensible starting point rather than theirs. Taste as you go.'
 		: recipe.confidence === 'low'
 			? written
-				? 'Written for your ingredients rather than read from a video, so the amounts are estimates. Taste as you go.'
+				? fromKitchen
+					? 'Written for your ingredients rather than read from a video, so the amounts are estimates. Taste as you go.'
+					: 'Written from what you described rather than read from a video, so the amounts are estimates. Taste as you go.'
 				: 'The reel was vague in places, so parts of this are inferred. Taste as you go.'
 			: null;
 
@@ -1778,7 +1792,11 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 							))
 						) : (
 							<span className="rx-chip">
-								{written ? 'Written for what you have' : 'No serving size given'}
+							{fromKitchen
+										? 'Written for what you have'
+										: written
+											? 'Written from what you described'
+											: 'No serving size given'}
 							</span>
 						)}
 					</div>

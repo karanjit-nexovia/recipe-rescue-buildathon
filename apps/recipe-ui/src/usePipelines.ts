@@ -314,8 +314,8 @@ export function usePipelines() {
 	);
 
 	const extractRecipe = useCallback(
-		(transcript: string, screenText?: string, scenes?: string) =>
-			ask<Recipe>((Q) => buildExtractionQuestion(Q as never, transcript, screenText, scenes)),
+		(transcript: string, screenText?: string, scenes?: string, source: 'reel' | 'described' = 'reel') =>
+			ask<Recipe>((Q) => buildExtractionQuestion(Q as never, transcript, screenText, scenes, source)),
 		[ask],
 	);
 
