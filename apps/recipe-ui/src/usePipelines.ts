@@ -1,10 +1,13 @@
 // =============================================================================
 // Pipeline lifecycle and the calls the app makes.
 //
-// Three pipelines, but only one of them reasons:
-//   transcribe — media in, text out. No LLM, so a run costs nothing.
-//   vision     — frames described by an image model. Escalated ONLY when
-//                transcription and OCR together come back near-empty.
+// Four pipelines, but only one of them reasons. The other three are a cost
+// ladder: each rung is only climbed when the one below came back short.
+//   transcribe — audio to text. The cheap rung, always run.
+//   screentext — frames to OCR. Escalated when the reel barely spoke, or
+//                spoke without ever naming an amount.
+//   vision     — frames described by an image model. The dear rung, escalated
+//                only when speech and screen text together come back empty.
 //   ask        — one generic chat pipeline. All prompting lives in the
 //                Question object (see prompts.ts), so a single pipeline
 //                serves extraction, substitution, and the fallback dish.
@@ -19,6 +22,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useShellConnection } from 'shell';
 
 import transcribePipe from './transcribe.pipe';
+import screentextPipe from './screentext.pipe';
 import askPipe from './ask.pipe';
 import visionPipe from './vision.pipe';
 import {
@@ -39,10 +43,11 @@ import type { Recipe, Substitution } from './types';
  */
 const TASK_TTL = 180;
 
-type PipeName = 'transcribe' | 'vision' | 'ask';
+type PipeName = 'transcribe' | 'screentext' | 'vision' | 'ask';
 
 const PIPELINES = {
 	transcribe: transcribePipe,
+	screentext: screentextPipe,
 	vision: visionPipe,
 	ask: askPipe,
 } satisfies Record<PipeName, typeof askPipe>;
@@ -229,9 +234,37 @@ export function usePipelines() {
 				return typeof v === 'string' ? v.trim() : '';
 			};
 
-			return { transcript: join('transcript'), screenText: join('screentext') };
+			return { transcript: join('transcript'), screenText: '' };
 			});
 		},
+		[client, withLiveTask],
+	);
+
+	/**
+	 * Read the text burned into the video — caption overlays, the quantity
+	 * cards creators put on screen.
+	 *
+	 * This used to run on every upload, in parallel with the audio, inside
+	 * transcribe.pipe. It was roughly half the cost of a video run: grabbing
+	 * frames and OCR-ing each one is the 71-second bottleneck, and it was being
+	 * paid for on reels where the cook says every amount out loud and the
+	 * overlay adds nothing. It is now escalated, on the same principle vision
+	 * already worked on.
+	 */
+	const readScreenText = useCallback(
+		async (file: File): Promise<string> =>
+			withLiveTask('screentext', async (token) => {
+				const uploads = await withTimeout(
+					client!.sendFiles([{ file, mimetype: file.type || 'video/mp4' }], token),
+					TRANSCRIBE_TIMEOUT_MS,
+					'Reading the on-screen text',
+				);
+				const done = uploads.find((u: { action: string; result?: unknown }) => u.action === 'complete' && u.result);
+				if (!done) return '';
+				const v = (done as { result: Record<string, unknown> }).result.screentext;
+				if (Array.isArray(v)) return v.filter((x) => typeof x === 'string').join('\n').trim();
+				return typeof v === 'string' ? v.trim() : '';
+			}),
 		[client, withLiveTask],
 	);
 
@@ -300,5 +333,14 @@ export function usePipelines() {
 		[ask],
 	);
 
-	return { client, isConnected, transcribe, describeFrames, extractRecipe, checkFridge, cookAlternative };
+	return {
+		client,
+		isConnected,
+		transcribe,
+		readScreenText,
+		describeFrames,
+		extractRecipe,
+		checkFridge,
+		cookAlternative,
+	};
 }

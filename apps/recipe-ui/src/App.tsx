@@ -389,6 +389,24 @@ const stepIngredients = (step: Step, ingredients: Ingredient[]): Ingredient[] =>
 	});
 };
 
+/**
+ * Did the cook actually say any amounts out loud?
+ *
+ * This decides whether reading the frames is worth paying for. A reel that says
+ * "200g pasta, two tablespoons of oil, one teaspoon of salt" has already given
+ * up its quantities, and OCR-ing every frame adds cost without adding much. A
+ * reel that says "add some cream and the usual spices" has not — and on those,
+ * the numbers are almost always sitting in an on-screen overlay, which is
+ * precisely what OCR is for.
+ *
+ * Counts amounts that carry a unit, so a stray "12 minutes" or "step 3" does
+ * not read as a quantity. Three is the bar: one or two could be times.
+ */
+const AMOUNT_RE =
+	/\b\d+(?:[.,/]\d+)?\s*(?:g|kg|ml|l|oz|lbs?|pounds?|cups?|tsp|tbsp|teaspoons?|tablespoons?|cloves?|pinch|handful|inch|cm)\b/gi;
+
+const statesAmounts = (text: string): boolean => (text.match(AMOUNT_RE)?.length ?? 0) >= 3;
+
 const mmss = (secs: number): string => {
 	const safe = Math.max(0, Math.round(secs));
 	return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`;
@@ -500,7 +518,8 @@ const SUB_VARIANT: Record<string, 'success' | 'warning' | 'error'> = {
 // =============================================================================
 
 const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
-	const { transcribe, describeFrames, extractRecipe, checkFridge, cookAlternative } = usePipelines();
+	const { transcribe, readScreenText, describeFrames, extractRecipe, checkFridge, cookAlternative } =
+		usePipelines();
 	const { appState, updateAppState, loaded } = useWorkspace() as {
 		appState: { saved?: SavedRecipe[] } | undefined;
 		updateAppState: (fn: (prev: Record<string, unknown>) => Record<string, unknown>) => void;
@@ -750,10 +769,20 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 				}
 
 				if (file) {
-					setBusy('Reading the speech and on-screen text');
+					setBusy('Listening to the reel');
 					const heard = await transcribe(file);
 					transcript = heard.transcript;
 					screenText = heard.screenText;
+
+					// Reading the frames is about half the cost of a video run, and
+					// on a reel where the cook says every amount out loud it buys
+					// almost nothing. So it is escalated on two conditions: the reel
+					// barely spoke, or it spoke without ever naming an amount — which
+					// is exactly when the quantities are living in an overlay.
+					if (transcript.length < THIN_EVIDENCE_CHARS || !statesAmounts(transcript)) {
+						setBusy('Reading the text on screen');
+						screenText = await readScreenText(file);
+					}
 
 					// Vision is the expensive stage, so escalate only when the
 					// reel genuinely said nothing — silent, captionless, fast cuts.
@@ -809,7 +838,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 				setBusy(null);
 			}
 		},
-		[describeFrames, extractRecipe, transcribe],
+		[describeFrames, extractRecipe, readScreenText, transcribe],
 	);
 
 	/** DropZone never filters by type — the host validates. Do it before the

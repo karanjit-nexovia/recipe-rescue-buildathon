@@ -44,16 +44,12 @@
 			}
 		},
 		{
-			"id": "audio_transcribe_1",
-			"provider": "audio_transcribe",
+			"id": "frame_grabber_1",
+			"provider": "frame_grabber",
 			"config": {
 				"parameters": {}
 			},
 			"input": [
-				{
-					"lane": "audio",
-					"from": "parse_1"
-				},
 				{
 					"lane": "video",
 					"from": "parse_1"
@@ -62,7 +58,7 @@
 			"ui": {
 				"position": {
 					"x": 430,
-					"y": 110
+					"y": 300
 				},
 				"measured": {
 					"width": 150,
@@ -71,21 +67,44 @@
 			}
 		},
 		{
-			"id": "response_text_1",
-			"provider": "response_text",
+			"id": "ocr_1",
+			"provider": "ocr",
 			"config": {
-				"laneName": "transcript"
+				"parameters": {}
 			},
 			"input": [
 				{
-					"lane": "text",
-					"from": "audio_transcribe_1"
+					"lane": "image",
+					"from": "frame_grabber_1"
 				}
 			],
 			"ui": {
 				"position": {
 					"x": 650,
-					"y": 110
+					"y": 300
+				},
+				"measured": {
+					"width": 150,
+					"height": 66
+				}
+			}
+		},
+		{
+			"id": "response_text_2",
+			"provider": "response_text",
+			"config": {
+				"laneName": "screentext"
+			},
+			"input": [
+				{
+					"lane": "text",
+					"from": "ocr_1"
+				}
+			],
+			"ui": {
+				"position": {
+					"x": 870,
+					"y": 300
 				},
 				"measured": {
 					"width": 150,
@@ -94,7 +113,7 @@
 			}
 		}
 	],
-	"project_id": "6a6a0004-df0a-40f8-8974-6a6338eee452",
+	"project_id": "e3a79447-d88c-4639-9997-8881a8392a46",
 	"viewport": {
 		"x": 0,
 		"y": 0,

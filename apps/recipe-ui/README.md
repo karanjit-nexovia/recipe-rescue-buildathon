@@ -37,10 +37,15 @@ genuinely helps. Recipes you save stay in your book, ready to cook again.
 
 ## How it's built
 
-Three pipelines, but only one of them does any thinking.
+Four pipelines, but only one of them does any thinking. The other three are a cost
+ladder: each is only run when the one before it came back short.
 
-`transcribe.pipe` turns media into text — `audio_transcribe` for speech, `frame_grabber`
-into `ocr` for on-screen text. It runs no model, so it costs nothing.
+`transcribe.pipe` listens to the audio. It is the cheap rung and always runs.
+
+`screentext.pipe` reads the text burned into the video with `frame_grabber` and `ocr`.
+It runs when the reel barely spoke, or spoke without ever naming an amount — which is
+exactly when the quantities are sitting in an on-screen overlay. On a reel where the
+cook says every amount out loud, it is skipped, and that halves the cost of the run.
 
 `vision.pipe` reads the frames with an image model, and runs *only* when transcription
 and OCR together come back with almost nothing — a silent reel with no legible overlay.
