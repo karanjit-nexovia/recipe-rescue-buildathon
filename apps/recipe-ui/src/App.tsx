@@ -95,8 +95,8 @@ const s: Record<string, React.CSSProperties> = {
 
 	stack: { display: 'flex', flexDirection: 'column', gap: 16 },
 	row: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' },
-	muted: { fontSize: 13, color: 'var(--rr-text-secondary)', lineHeight: 1.55 },
-	meta: { fontSize: 12.5, color: 'var(--rr-text-secondary)', letterSpacing: 0.2 },
+	muted: { fontSize: 13, color: 'var(--rx-ink-soft)', lineHeight: 1.55 },
+	meta: { fontSize: 12.5, color: 'var(--rx-ink-soft)', letterSpacing: 0.2 },
 
 
 	textarea: {
@@ -104,12 +104,12 @@ const s: Record<string, React.CSSProperties> = {
 		minHeight: 130,
 		padding: 12,
 		borderRadius: 8,
-		border: '1px solid var(--rr-border, #d5d5d5)',
+		border: '1px solid var(--rx-line)',
 		fontFamily: 'inherit',
 		fontSize: 13.5,
 		lineHeight: 1.6,
 		background: 'var(--rr-bg-input, transparent)',
-		color: 'var(--rr-text-primary)',
+		color: 'var(--rx-ink)',
 		resize: 'vertical',
 		boxSizing: 'border-box',
 	},
@@ -121,33 +121,33 @@ const s: Record<string, React.CSSProperties> = {
 		gap: '4px 18px',
 		alignItems: 'baseline',
 		padding: '10px 0',
-		borderBottom: '1px solid var(--rr-border-subtle, rgba(128,128,128,0.18))',
+		borderBottom: '1px solid var(--rx-line)',
 	},
 	ingName: { fontSize: 14, fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
 	ingQty: {
 		fontSize: 13,
 		fontVariantNumeric: 'tabular-nums',
-		color: 'var(--rr-text-secondary)',
+		color: 'var(--rx-ink-soft)',
 		textAlign: 'right',
 		whiteSpace: 'normal',
 		maxWidth: 260,
 	},
-	ingNote: { gridColumn: '1 / -1', fontSize: 12.5, color: 'var(--rr-text-secondary)', lineHeight: 1.5 },
+	ingNote: { gridColumn: '1 / -1', fontSize: 12.5, color: 'var(--rx-ink-soft)', lineHeight: 1.5 },
 
 	// --- steps -------------------------------------------------------------
 	doneWhen: {
 		marginTop: 8,
 		padding: '8px 11px',
 		borderRadius: 6,
-		borderLeft: '3px solid var(--rr-accent, #6b8afd)',
-		background: 'var(--rr-bg-hover, rgba(128,128,128,0.08))',
+		borderLeft: '3px solid var(--rx-gold)',
+		background: 'var(--rx-gold-wash)',
 		fontSize: 12.5,
 		lineHeight: 1.55,
 	},
 
 	// --- cook mode ---------------------------------------------------------
-	progressTrack: { height: 3, borderRadius: 2, background: 'var(--rr-bg-hover, rgba(128,128,128,0.2))', overflow: 'hidden', marginTop: 14 },
-	progressFill: { height: '100%', background: 'var(--rr-accent, #6b8afd)', transition: 'width 300ms linear' },
+	progressTrack: { height: 3, borderRadius: 2, background: 'rgba(31, 28, 22, 0.09)', overflow: 'hidden', marginTop: 14 },
+	progressFill: { height: '100%', background: 'var(--rx-gold)', transition: 'width 300ms linear' },
 };
 
 // =============================================================================
@@ -161,13 +161,48 @@ const s: Record<string, React.CSSProperties> = {
 // =============================================================================
 
 const CSS = `
+/* ===========================================================================
+   PALETTE — gold on warm white.
+   
+   The accent is set as the shell's own --rr-accent rather than only on our
+   classes, because Buttons, Banners and Cards are the shell's components: style
+   ours alone and you get gold content sitting in blue chrome.
+
+   Gold is used sparingly and on purpose. It marks the things you act on — the
+   primary button, a ticked box, a progress bar, the cue in cook mode — and
+   never decorates. A page where everything is gold has no accent at all, only
+   a colour scheme, and the ticked-off state stops meaning anything.
+   =========================================================================== */
+:root {
+  --rx-gold: #b8912f;
+  --rx-gold-soft: #d8bb6b;
+  --rx-gold-wash: rgba(184, 145, 47, 0.09);
+  --rx-ink: #1f1c16;
+  --rx-ink-soft: #6d6559;
+  --rx-line: rgba(31, 28, 22, 0.11);
+  --rx-paper: #fdfbf6;
+  --rx-card: #ffffff;
+
+  /* Hand the accent to the shell so its own components come along. */
+  --rr-accent: var(--rx-gold);
+  --rr-accent-hover: #a37f28;
+}
+
+/* Warm white ground, and a serif for the things you read rather than press —
+   a recipe is a document before it is an interface. */
+.rx-page { background: var(--rx-paper); color: var(--rx-ink); }
+.rx-page h1, .rx-page h2, .rx-title, .rx-hero h1, .rx-verdict h2, .rx-done h2 {
+  font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  font-weight: 600; letter-spacing: -0.2px;
+}
+.rx-page .rx-label { color: var(--rx-gold); opacity: 0.95; }
 .rx-head { margin-bottom: 22px; }
 .rx-title { font-size: 27px; line-height: 1.18; font-weight: 650; letter-spacing: -0.4px; margin: 0 0 12px; }
 .rx-chips { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; }
 .rx-chip {
   font-size: 12.5px; padding: 4px 11px; border-radius: 999px;
-  background: var(--rr-bg-hover, rgba(128,128,128,0.12));
-  color: var(--rr-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap;
+  background: var(--rx-gold-wash);
+  color: var(--rx-ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 
 /* The whole point of the redesign: what I need, beside what I do. */
@@ -180,7 +215,7 @@ const CSS = `
 
 .rx-label {
   font-size: 11px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase;
-  color: var(--rr-text-secondary); margin: 0 0 14px;
+  color: var(--rx-ink-soft); margin: 0 0 14px;
 }
 
 .rx-group { margin: 0 0 20px; }
@@ -188,69 +223,69 @@ const CSS = `
 .rx-group-name { font-size: 12.5px; font-weight: 650; margin: 0 0 7px; }
 .rx-ing {
   display: grid; grid-template-columns: 1fr auto; gap: 2px 14px; padding: 7px 0;
-  border-bottom: 1px solid var(--rr-border-subtle, rgba(128,128,128,0.13));
+  border-bottom: 1px solid var(--rx-line);
 }
 .rx-ing:last-child { border-bottom: 0; }
 .rx-ing-name { font-size: 13.5px; line-height: 1.45; }
 .rx-ing-qty {
-  font-size: 13px; text-align: right; color: var(--rr-text-secondary);
+  font-size: 13px; text-align: right; color: var(--rx-ink-soft);
   font-variant-numeric: tabular-nums; max-width: 160px;
 }
 /* A word, not a badge. Thirty badges down a list is thirty things shouting. */
-.rx-est { font-size: 10.5px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--rr-text-secondary); opacity: 0.7; margin-left: 7px; }
-.rx-ing-note { grid-column: 1 / -1; font-size: 12px; color: var(--rr-text-secondary); line-height: 1.45; margin-top: 2px; }
+.rx-est { font-size: 10.5px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--rx-ink-soft); opacity: 0.7; margin-left: 7px; }
+.rx-ing-note { grid-column: 1 / -1; font-size: 12px; color: var(--rx-ink-soft); line-height: 1.45; margin-top: 2px; }
 
 .rx-step {
   display: grid; grid-template-columns: 26px 1fr; gap: 16px; padding: 19px 0;
-  border-bottom: 1px solid var(--rr-border-subtle, rgba(128,128,128,0.13));
+  border-bottom: 1px solid var(--rx-line);
 }
 .rx-step:first-of-type { padding-top: 0; }
 .rx-step:last-child { border-bottom: 0; }
-.rx-step-n { font-size: 13px; font-weight: 700; color: var(--rr-text-secondary); font-variant-numeric: tabular-nums; padding-top: 3px; }
+.rx-step-n { font-size: 13px; font-weight: 700; color: var(--rx-ink-soft); font-variant-numeric: tabular-nums; padding-top: 3px; }
 /* Read from across a counter, often with one hand and wet fingers. */
 .rx-step-text { font-size: 15.5px; line-height: 1.62; }
 .rx-step-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.rx-step-time { font-size: 12px; color: var(--rr-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 3px; }
+.rx-step-time { font-size: 12px; color: var(--rx-ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; padding-top: 3px; }
 /* Was a bordered, filled callout on every step. Thirteen of those down a page
    is thirteen alarms; the cue is supporting text, so it now reads as such. */
-.rx-cue { margin-top: 7px; font-size: 13px; line-height: 1.5; color: var(--rr-text-secondary); }
-.rx-cue b { font-weight: 600; color: var(--rr-text-primary); }
+.rx-cue { margin-top: 7px; font-size: 13px; line-height: 1.5; color: var(--rx-ink-soft); }
+.rx-cue b { font-weight: 600; color: var(--rx-ink); }
 
-.rx-caveats { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--rr-border-subtle, rgba(128,128,128,0.13)); }
+.rx-caveats { margin-top: 30px; padding-top: 22px; border-top: 1px solid var(--rx-line); }
 .rx-caveats ul { margin: 0; padding-left: 17px; }
-.rx-caveats li { font-size: 12.5px; line-height: 1.55; color: var(--rr-text-secondary); margin-bottom: 6px; }
+.rx-caveats li { font-size: 12.5px; line-height: 1.55; color: var(--rx-ink-soft); margin-bottom: 6px; }
 
 
 /* --- the guided flow ------------------------------------------------------ */
 .rx-hero { text-align: center; padding: 44px 16px 36px; }
 .rx-hero h1 { font-size: 30px; line-height: 1.2; font-weight: 650; letter-spacing: -0.5px; margin: 0 0 12px; }
-.rx-hero p { font-size: 14.5px; line-height: 1.6; color: var(--rr-text-secondary); margin: 0 auto 26px; max-width: 460px; }
+.rx-hero p { font-size: 14.5px; line-height: 1.6; color: var(--rx-ink-soft); margin: 0 auto 26px; max-width: 460px; }
 .rx-choices { display: grid; gap: 14px; grid-template-columns: 1fr; max-width: 620px; margin: 0 auto; }
 @media (min-width: 680px) { .rx-choices { grid-template-columns: 1fr 1fr; } }
 .rx-choice {
   text-align: left; appearance: none; font: inherit; cursor: pointer;
   padding: 20px; border-radius: 12px;
-  border: 1px solid var(--rr-border, rgba(128,128,128,0.35));
+  border: 1px solid var(--rx-line);
   background: transparent; color: inherit;
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
-.rx-choice:hover { border-color: var(--rr-accent, #6b8afd); background: var(--rr-bg-hover, rgba(128,128,128,0.06)); transform: translateY(-2px); }
+.rx-choice:hover { border-color: var(--rx-gold); background: var(--rx-gold-wash); transform: translateY(-2px); }
 .rx-choice b { display: block; font-size: 15px; margin-bottom: 6px; }
-.rx-choice span { font-size: 12.5px; line-height: 1.55; color: var(--rr-text-secondary); }
+.rx-choice span { font-size: 12.5px; line-height: 1.55; color: var(--rx-ink-soft); }
 .rx-steps { display: flex; gap: 7px; align-items: center; justify-content: center; margin-bottom: 22px; }
-.rx-pip { width: 26px; height: 3px; border-radius: 2px; background: var(--rr-bg-hover, rgba(128,128,128,0.25)); transition: background 240ms ease; }
-.rx-pip.is-on { background: var(--rr-accent, #6b8afd); }
-.rx-pip.is-past { background: var(--rr-text-secondary); opacity: 0.4; }
+.rx-pip { width: 26px; height: 3px; border-radius: 2px; background: rgba(31, 28, 22, 0.10); transition: background 240ms ease; }
+.rx-pip.is-on { background: var(--rx-gold); }
+.rx-pip.is-past { background: var(--rx-ink-soft); opacity: 0.4; }
 .rx-verdict { text-align: center; padding: 10px 0 26px; }
 .rx-verdict h2 { font-size: 23px; font-weight: 640; margin: 0 0 10px; letter-spacing: -0.3px; }
-.rx-verdict p { font-size: 14px; line-height: 1.6; color: var(--rr-text-secondary); margin: 0 auto; max-width: 520px; }
+.rx-verdict p { font-size: 14px; line-height: 1.6; color: var(--rx-ink-soft); margin: 0 auto; max-width: 520px; }
 @media (prefers-reduced-motion: reduce) { .rx-choice:hover { transform: none; } }
 
 
 
 /* Suggestions, not the recipe. Visibly its own thing, so nobody mistakes an
    idea of ours for something the cook actually did. */
-.rx-touches { margin-top: 26px; padding: 16px 18px; border-radius: 10px; background: var(--rr-bg-hover, rgba(128,128,128,0.07)); }
+.rx-touches { margin-top: 26px; padding: 16px 18px; border-radius: 10px; background: var(--rx-gold-wash); }
 .rx-touches ul { margin: 0; padding-left: 17px; }
 .rx-touches li { font-size: 13px; line-height: 1.6; margin-bottom: 7px; }
 .rx-touches li:last-child { margin-bottom: 0; }
@@ -261,12 +296,29 @@ const CSS = `
 .rx-done .rx-mark {
   width: 62px; height: 62px; border-radius: 50%; margin: 0 auto 22px;
   display: flex; align-items: center; justify-content: center;
-  background: var(--rr-accent, #6b8afd); color: #fff; font-size: 30px; line-height: 1;
+  background: var(--rx-gold); color: #fff; font-size: 30px; line-height: 1;
   animation: rx-pop 520ms 160ms cubic-bezier(0.2,0.8,0.3,1) both;
 }
 .rx-done h2 { font-size: 27px; font-weight: 650; letter-spacing: -0.4px; margin: 0 0 12px; }
-.rx-done p { font-size: 14.5px; line-height: 1.6; color: var(--rr-text-secondary); margin: 0 auto 26px; max-width: 440px; }
+.rx-done p { font-size: 14.5px; line-height: 1.6; color: var(--rx-ink-soft); margin: 0 auto 26px; max-width: 440px; }
 @media (prefers-reduced-motion: reduce) { .rx-done, .rx-done .rx-mark { animation: none; } }
+
+/* Cards lift off the warm ground rather than sitting flush against it. */
+.rx-page [class*="card"], .rx-page [class*="Card"] {
+  border-radius: 12px;
+}
+
+/* The one place gold is allowed to be a surface rather than a mark. */
+.rx-choice:hover { border-color: var(--rx-gold); background: var(--rx-gold-wash); }
+.rx-chip { border: 1px solid var(--rx-line); background: transparent; }
+.rx-group-name { color: var(--rx-ink); }
+.rx-touches { background: var(--rx-gold-wash); border: 1px solid rgba(184, 145, 47, 0.18); }
+.rx-done .rx-mark { box-shadow: 0 6px 20px rgba(184, 145, 47, 0.35); }
+.rx-timer { color: var(--rx-ink); }
+.rx-est { color: var(--rx-gold); opacity: 0.85; }
+
+/* Ticked reads as confirmed, in the accent, without shouting. */
+.rx-ing.is-done .rx-ing-name { color: var(--rx-ink-soft); }
 
 /* --- motion ------------------------------------------------------------- */
 @keyframes rx-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
@@ -281,65 +333,65 @@ const CSS = `
   padding-left: 7px; padding-right: 7px; margin-left: -7px; margin-right: -7px;
   transition: background 160ms ease, opacity 220ms ease;
 }
-.rx-ing:hover, .rx-step:hover { background: var(--rr-bg-hover, rgba(128,128,128,0.07)); }
+.rx-ing:hover, .rx-step:hover { background: var(--rx-gold-wash); }
 .rx-ing-name { display: flex; align-items: flex-start; }
 .rx-box {
   width: 15px; height: 15px; border-radius: 4px; flex: none; margin: 2px 10px 0 0;
-  border: 1.5px solid var(--rr-border, rgba(128,128,128,0.45));
+  border: 1.5px solid rgba(31, 28, 22, 0.22);
   display: inline-flex; align-items: center; justify-content: center;
   font-size: 10px; line-height: 1; color: transparent;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
 }
-.is-done .rx-box { background: var(--rr-accent, #6b8afd); border-color: var(--rr-accent, #6b8afd); color: #fff; animation: rx-pop 260ms ease; }
-.rx-ing.is-done .rx-ing-name { color: var(--rr-text-secondary); }
+.is-done .rx-box { background: var(--rx-gold); border-color: var(--rx-gold); color: #fff; animation: rx-pop 260ms ease; }
+.rx-ing.is-done .rx-ing-name { color: var(--rx-ink-soft); }
 .rx-ing.is-done .rx-ing-qty { opacity: 0.75; }
 .rx-step.is-done { opacity: 0.45; }
 .rx-step.is-done .rx-step-text { text-decoration: line-through; }
 
 .rx-progress { display: flex; align-items: center; gap: 11px; margin-bottom: 15px; }
-.rx-bar { flex: 1; height: 4px; border-radius: 3px; background: var(--rr-bg-hover, rgba(128,128,128,0.18)); overflow: hidden; }
-.rx-bar-fill { height: 100%; background: var(--rr-accent, #6b8afd); border-radius: 3px; transition: width 340ms cubic-bezier(0.2,0.7,0.3,1); }
-.rx-count { font-size: 12px; color: var(--rr-text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rx-bar { flex: 1; height: 4px; border-radius: 3px; background: rgba(31, 28, 22, 0.09); overflow: hidden; }
+.rx-bar-fill { height: 100%; background: var(--rx-gold); border-radius: 3px; transition: width 340ms cubic-bezier(0.2,0.7,0.3,1); }
+.rx-count { font-size: 12px; color: var(--rx-ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 /* The availability check belongs beside the ingredients it asks about, not
    below thirteen steps. It also fills the column the sticky aside used to
    leave empty. */
-.rx-panel { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--rr-border-subtle, rgba(128,128,128,0.13)); }
+.rx-panel { margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--rx-line); }
 .rx-solo .rx-panel { margin-top: 0; padding-top: 0; border-top: 0; }
 .rx-panel textarea { font-size: 13px; }
 
 /* --- serving scaler ------------------------------------------------------ */
-.rx-scale { display: inline-flex; border: 1px solid var(--rr-border, rgba(128,128,128,0.35)); border-radius: 999px; overflow: hidden; }
+.rx-scale { display: inline-flex; border: 1px solid var(--rx-line); border-radius: 999px; overflow: hidden; }
 .rx-scale button {
   appearance: none; background: transparent; border: 0; padding: 4px 12px;
-  font: inherit; font-size: 12px; color: var(--rr-text-secondary); cursor: pointer;
+  font: inherit; font-size: 12px; color: var(--rx-ink-soft); cursor: pointer;
   transition: background 150ms ease, color 150ms ease;
 }
-.rx-scale button:hover { background: var(--rr-bg-hover, rgba(128,128,128,0.12)); }
-.rx-scale button.is-on { background: var(--rr-accent, #6b8afd); color: #fff; }
+.rx-scale button:hover { background: var(--rx-gold-wash); }
+.rx-scale button.is-on { background: var(--rx-gold); color: #fff; }
 
 /* --- cook mode ----------------------------------------------------------- */
 .rx-cook { max-width: 700px; margin: 0 auto; }
 .rx-cook-step { font-size: 25px; line-height: 1.45; font-weight: 500; margin: 0 0 18px; }
 /* Here the accent border earns its keep: one cue on the screen, not thirteen. */
 .rx-cook-cue {
-  font-size: 15px; line-height: 1.55; color: var(--rr-text-secondary);
-  border-left: 3px solid var(--rr-accent, #6b8afd); padding-left: 13px; margin-bottom: 24px;
+  font-size: 15px; line-height: 1.55; color: var(--rx-ink-soft);
+  border-left: 3px solid var(--rx-gold); padding-left: 13px; margin-bottom: 24px;
 }
-.rx-cook-cue b { color: var(--rr-text-primary); font-weight: 600; }
+.rx-cook-cue b { color: var(--rx-ink); font-weight: 600; }
 .rx-timer { font-size: 58px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 1px; line-height: 1.05; }
-.rx-cook-ing { font-size: 13px; line-height: 1.6; color: var(--rr-text-secondary); margin-bottom: 22px; }
-.rx-cook-ing b { color: var(--rr-text-primary); font-weight: 600; }
+.rx-cook-ing { font-size: 13px; line-height: 1.6; color: var(--rx-ink-soft); margin-bottom: 22px; }
+.rx-cook-ing b { color: var(--rx-ink); font-weight: 600; }
 .rx-dots { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 24px; }
 .rx-dot {
   width: 8px; height: 8px; border-radius: 50%; border: 0; padding: 0; cursor: pointer;
-  background: var(--rr-bg-hover, rgba(128,128,128,0.3));
+  background: rgba(31, 28, 22, 0.10);
   transition: background 200ms ease, transform 200ms ease;
 }
 .rx-dot:hover { transform: scale(1.3); }
-.rx-dot.is-on { background: var(--rr-accent, #6b8afd); transform: scale(1.4); }
-.rx-dot.is-past { background: var(--rr-text-secondary); opacity: 0.45; }
-.rx-hint { font-size: 11.5px; color: var(--rr-text-secondary); opacity: 0.75; margin-top: 14px; }
+.rx-dot.is-on { background: var(--rx-gold); transform: scale(1.4); }
+.rx-dot.is-past { background: var(--rx-ink-soft); opacity: 0.45; }
+.rx-hint { font-size: 11.5px; color: var(--rx-ink-soft); opacity: 0.75; margin-top: 14px; }
 
 /* Respect the system setting rather than animating over someone who asked us
    not to — motion sickness and vestibular disorders are real. */
@@ -1115,7 +1167,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 	};
 
 	return (
-		<div style={s.scroll}>
+		<div style={s.scroll} className="rx-page">
 			<div style={s.page}>
 				<div style={s.sticky}>
 					<TabControl menu={menu} activeId={view} onSelect={go} />
@@ -1584,7 +1636,7 @@ const IngredientList: React.FC<IngredientListProps> = ({
 							<>
 								{servings ? (
 									<div style={{ ...s.row, marginBottom: 14, justifyContent: 'space-between' }}>
-										<span style={{ fontSize: 12, color: 'var(--rr-text-secondary)' }}>
+										<span style={{ fontSize: 12, color: 'var(--rx-ink-soft)' }}>
 											Serves {Math.round(servings * scale)}
 										</span>
 										<span className="rx-scale">
@@ -2014,7 +2066,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 												href={mapsUrl(storeQuery(recipe, missing))}
 												target="_blank"
 												rel="noopener noreferrer"
-												style={{ fontSize: 13, color: 'var(--rr-accent, #6b8afd)' }}
+												style={{ fontSize: 13, color: 'var(--rx-gold)' }}
 											>
 												Find a {storeQuery(recipe, missing).replace(' grocery store', '')} grocery store near you
 											</a>
@@ -2133,7 +2185,7 @@ const StepRow: React.FC<{ step: Step; index: number; done: boolean; onToggle: ()
 		<div>
 			<div className="rx-step-top">
 				<div className="rx-step-text">
-					<b style={{ color: 'var(--rr-text-secondary)', fontWeight: 700, marginRight: 8 }}>
+					<b style={{ color: 'var(--rx-ink-soft)', fontWeight: 700, marginRight: 8 }}>
 						{step.n ?? index + 1}
 					</b>
 					{step.instruction ?? ''}
@@ -2275,7 +2327,7 @@ const CookView: React.FC<{
 					<div style={s.row}>
 						<span
 								className="rx-timer"
-								style={{ color: left === 0 ? 'var(--rr-accent, #6b8afd)' : undefined }}
+								style={{ color: left === 0 ? 'var(--rx-gold)' : undefined }}
 							>
 							{mmss(left === null ? total : left)}
 						</span>
