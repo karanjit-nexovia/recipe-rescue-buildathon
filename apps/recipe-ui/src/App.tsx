@@ -70,7 +70,7 @@ const SCALES: Array<[number, string]> = [
 	[3, '3x'],
 ];
 
-type View = 'welcome' | 'source' | 'ingest' | 'ingredients' | 'verdict' | 'recipe' | 'cook' | 'book';
+type View = 'welcome' | 'source' | 'ingest' | 'ingredients' | 'verdict' | 'recipe' | 'cook' | 'done' | 'book';
 
 /** Which way in the user chose on the second screen. */
 type SourceMode = 'link' | 'describe';
@@ -245,6 +245,20 @@ const CSS = `
 .rx-verdict h2 { font-size: 23px; font-weight: 640; margin: 0 0 10px; letter-spacing: -0.3px; }
 .rx-verdict p { font-size: 14px; line-height: 1.6; color: var(--rr-text-secondary); margin: 0 auto; max-width: 520px; }
 @media (prefers-reduced-motion: reduce) { .rx-choice:hover { transform: none; } }
+
+
+/* --- finishing ------------------------------------------------------------ */
+@keyframes rx-rise { 0% { opacity: 0; transform: scale(0.94) translateY(10px); } 100% { opacity: 1; transform: none; } }
+.rx-done { text-align: center; padding: 50px 16px 40px; animation: rx-rise 420ms cubic-bezier(0.2,0.8,0.3,1) both; }
+.rx-done .rx-mark {
+  width: 62px; height: 62px; border-radius: 50%; margin: 0 auto 22px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--rr-accent, #6b8afd); color: #fff; font-size: 30px; line-height: 1;
+  animation: rx-pop 520ms 160ms cubic-bezier(0.2,0.8,0.3,1) both;
+}
+.rx-done h2 { font-size: 27px; font-weight: 650; letter-spacing: -0.4px; margin: 0 0 12px; }
+.rx-done p { font-size: 14.5px; line-height: 1.6; color: var(--rr-text-secondary); margin: 0 auto 26px; max-width: 440px; }
+@media (prefers-reduced-motion: reduce) { .rx-done, .rx-done .rx-mark { animation: none; } }
 
 /* --- motion ------------------------------------------------------------- */
 @keyframes rx-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
@@ -1008,6 +1022,31 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 		setSavedId(entry.id);
 	}, [loaded, recipe, updateAppState]);
 
+	/**
+	 * How many dishes this person has actually cooked, not how many they saved.
+	 * cookedCount existed on SavedRecipe from the start and was never once
+	 * incremented — finishing a cook is the only event that should touch it.
+	 */
+	const cooksSoFar = useMemo(
+		() => saved.reduce((n, sv) => n + (Number(sv.cookedCount) || 0), 0),
+		[saved],
+	);
+
+	const finishCooking = useCallback(() => {
+		if (savedId) {
+			updateAppState((prev) => {
+				const existing = Array.isArray(prev.saved) ? (prev.saved as SavedRecipe[]) : [];
+				return {
+					...prev,
+					saved: existing.map((sv) =>
+						sv.id === savedId ? { ...sv, cookedCount: (Number(sv.cookedCount) || 0) + 1 } : sv,
+					),
+				};
+			});
+		}
+		setView('done');
+	}, [savedId, updateAppState]);
+
 	const alreadySaved = !!savedId && saved.some((sv) => sv.id === savedId);
 
 	// -------------------------------------------------------------- rendering
@@ -1165,10 +1204,32 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 
 					{view === 'cook' &&
 						(recipe?.steps?.length ? (
-							<CookView recipe={recipe} doneStep={doneStep} onToggleStep={toggleStep} />
+							<CookView
+								recipe={recipe}
+								doneStep={doneStep}
+								onToggleStep={toggleStep}
+								onFinish={finishCooking}
+							/>
 						) : (
 							<EmptyState title="Nothing to cook yet" description="Build a recipe first." />
 						))}
+
+					{view === 'done' && (
+						<DoneView
+							title={recipe?.title}
+							first={cooksSoFar <= 1}
+							isSaved={!!savedId}
+							canSave={loaded}
+							onSave={saveRecipe}
+							onBook={() => go('book')}
+							onAnother={() => {
+								setRecipe(null);
+								setSub(null);
+								setSavedId(null);
+								go('welcome');
+							}}
+						/>
+					)}
 
 					{view === 'book' && (
 						<BookView
@@ -1381,6 +1442,53 @@ const VerdictView: React.FC<{
 			)}
 		</div>
 		{children}
+	</div>
+);
+
+/**
+ * The end of a cook.
+ *
+ * Marking the last step done used to do nothing at all — the advance was
+ * guarded against running past the end, and there was nothing on the other
+ * side of it. Finishing a dish is the moment this whole app exists for, and it
+ * is also the only honest moment to ask someone to keep the recipe: they know
+ * now whether it was any good.
+ */
+const DoneView: React.FC<{
+	title?: string;
+	first: boolean;
+	isSaved: boolean;
+	canSave: boolean;
+	onSave: () => void;
+	onBook: () => void;
+	onAnother: () => void;
+}> = ({ title, first, isSaved, canSave, onSave, onBook, onAnother }) => (
+	<div className="rx-done">
+		<div className="rx-mark">✓</div>
+		<h2>
+			{first ? 'Congratulations on your first dish' : 'Another one down'}
+		</h2>
+		<p>
+			{title ? `You cooked ${title}.` : 'You cooked it.'}{' '}
+			{first
+				? 'That is the hard one over with — the next is easier, and the one after that is just dinner.'
+				: 'Keep it in your book and it is one tap away next time.'}
+		</p>
+		<div style={{ ...s.row, justifyContent: 'center' }}>
+			{!isSaved && (
+				<Button disabled={!canSave} onClick={onSave}>
+					Save it to my cookbook
+				</Button>
+			)}
+			{isSaved && (
+				<Button variant="secondary" onClick={onBook}>
+					Open my cookbook
+				</Button>
+			)}
+			<Button variant="secondary" onClick={onAnother}>
+				Cook something else
+			</Button>
+		</div>
 	</div>
 );
 
@@ -1904,7 +2012,8 @@ const CookView: React.FC<{
 	recipe: Recipe;
 	doneStep: number[];
 	onToggleStep: (i: number) => void;
-}> = ({ recipe, doneStep, onToggleStep }) => {
+	onFinish: () => void;
+}> = ({ recipe, doneStep, onToggleStep, onFinish }) => {
 	const steps = recipe.steps ?? [];
 	const [index, setIndex] = useState(0);
 	const [left, setLeft] = useState<number | null>(null);
@@ -2044,13 +2153,19 @@ const CookView: React.FC<{
 					<Button
 						variant={doneStep.includes(index) ? 'secondary' : undefined}
 						onClick={() => {
+							const wasDone = doneStep.includes(index);
 							onToggleStep(index);
-							// Ticking a step off is almost always followed by moving to
-							// the next one, so save the second tap — but never skip past
-							// the end, and never advance when un-ticking.
-							if (!doneStep.includes(index) && index < steps.length - 1) {
-								setIndex(index + 1);
+							if (wasDone) return;
+							// Every step ticked means the dish is cooked. Marking the last
+							// one used to do nothing whatsoever, which is a strange way to
+							// end the one journey the app is named after.
+							const remaining = steps.filter((_, i) => i !== index && !doneStep.includes(i));
+							if (remaining.length === 0) {
+								onFinish();
+								return;
 							}
+							// Otherwise carry on to the next step, saving the second tap.
+							if (index < steps.length - 1) setIndex(index + 1);
 						}}
 					>
 						{doneStep.includes(index) ? 'Done — tap to undo' : 'Mark done'}
