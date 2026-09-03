@@ -446,14 +446,6 @@ const sameIngredient = (a?: string, b?: string): boolean => {
 	return x === y || x.includes(y) || y.includes(x);
 };
 
-const shoppingList = (recipe: Recipe, sub: Substitution): ShoppingItem[] =>
-	(sub.lines ?? [])
-		.filter((ln) => ln.status === 'missing' && ln.item?.trim())
-		.map((ln) => {
-			const match = recipe.ingredients?.find((ing) => sameIngredient(ing.item, ln.item));
-			return { item: ln.item!.trim(), quantity: match?.quantity, why: ln.tradeoff };
-		});
-
 /**
  * Where to send someone for a wonton wrapper.
  *
@@ -819,19 +811,31 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 	// ---------------------------------------------------------- substitution
 
 	const runSubstitute = useCallback(async () => {
-		if (!recipe || !fridge.trim() || inFlight.current) return;
+		// The ticks are the answer now, so an empty free-text box is fine — but
+		// having ticked nothing at all is not an answer, it is an unanswered form.
+		if (!recipe || inFlight.current || doneIng.length === 0) return;
 		inFlight.current = true;
 		setError(null);
 		setBusy('Checking what you can swap');
 		try {
-			setSub(await checkFridge(recipe, fridge));
+			const all = recipe.ingredients ?? [];
+			const named = (list: Ingredient[]) =>
+				list.map((i) => [i.item, i.quantity].filter(Boolean).join(' — ')).filter(Boolean);
+			setSub(
+				await checkFridge(
+					recipe,
+					fridge,
+					named(all.filter((_, i) => doneIng.includes(i))),
+					named(all.filter((_, i) => !doneIng.includes(i))),
+				),
+			);
 		} catch (err) {
 			setError(errText(err));
 		} finally {
 			inFlight.current = false;
 			setBusy(null);
 		}
-	}, [checkFridge, fridge, recipe]);
+	}, [checkFridge, doneIng, fridge, recipe]);
 
 	/**
 	 * Cook the fallback the substitution named instead.
@@ -1125,6 +1129,15 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 
 	const grouped = useMemo(() => groupIngredients(ingredients), [ingredients]);
 
+	// A tick means "I have this". Everything unticked is what you would have to
+	// buy, which makes the shopping list exact rather than something a model
+	// inferred from a sentence you typed.
+	const haveCount = doneIng.length;
+	const lacking = useMemo(
+		() => ingredients.filter((_, i) => !doneIng.includes(i)),
+		[ingredients, doneIng],
+	);
+
 	// Cuisine, servings and time were 12.5px muted text — the smallest thing on
 	// screen, holding the only two numbers anyone plans an evening around.
 	const chips = [
@@ -1148,7 +1161,22 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 	// and no spinner — the panel is just hidden until asked for.
 	const [shopping, setShopping] = useState(false);
 	const [copied, setCopied] = useState(false);
-	const missing = useMemo(() => (sub ? shoppingList(recipe, sub) : []), [recipe, sub]);
+	const missing = useMemo<ShoppingItem[]>(
+		() =>
+			lacking
+				.filter((ing) => ing.item?.trim())
+				.map((ing) => ({
+					item: ing.item!.trim(),
+					quantity: ing.quantity ? scaleQuantity(ing.quantity, scale) : undefined,
+					// If the fridge check found a swap for it, that is worth knowing
+					// while standing in the aisle deciding whether to bother.
+					why: sub?.lines?.find((ln) => ln.status === 'substitute' && sameIngredient(ln.item, ing.item))
+						?.useInstead
+						? `Or swap: ${sub.lines.find((ln) => sameIngredient(ln.item, ing.item))?.useInstead}`
+						: undefined,
+				})),
+		[lacking, scale, sub],
+	);
 
 	// A new fridge answer invalidates the old list; leaving the panel open would
 	// show items worked out against the previous one.
@@ -1207,7 +1235,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 
 				<div className="rx-split">
 					<aside className="rx-aside rx-in rx-in-2">
-						<div className="rx-label">Ingredients</div>
+						<div className="rx-label">Ingredients — tick what you have</div>
 
 						{ingredients.length > 0 && (
 							<>
@@ -1239,7 +1267,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 										/>
 									</div>
 									<span className="rx-count">
-										{doneIng.length}/{ingredients.length} out
+										{doneIng.length}/{ingredients.length} in your kitchen
 									</span>
 								</div>
 							</>
@@ -1333,20 +1361,38 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 				</div>
 			</Card>
 
-			<Card header="Cook it with what you have">
+			<Card header="Can you make this tonight?">
 				<p style={{ ...s.muted, marginTop: 0 }}>
-					Type what is in your kitchen. Rough is fine — &ldquo;some onions, half a lemon, the
-					usual spices&rdquo;.
+					{haveCount === 0
+						? 'Tick the ingredients you already have in the list above, then check here.'
+						: `You have ${haveCount} of ${ingredients.length}. ${
+								lacking.length
+									? `Missing: ${lacking
+											.slice(0, 4)
+											.map((i) => i.item)
+											.join(', ')}${lacking.length > 4 ? `, and ${lacking.length - 4} more` : ''}.`
+									: 'That is everything the recipe asks for.'
+							}`}
+				</p>
+
+				{/* Optional, and second. The ticks say what you have OF THIS RECIPE,
+				    which is what the shopping list needs. This says what else is in
+				    the kitchen, which is the only way to suggest a different dish —
+				    knowing you are out of wonton wrappers says nothing about whether
+				    you own rice. */}
+				<p style={{ ...s.muted, marginBottom: 6 }}>
+					Anything else in your kitchen? Optional, and only used to suggest something else
+					if this one is off.
 				</p>
 				<textarea
-					style={s.textarea}
+					style={{ ...s.textarea, minHeight: 80 }}
 					value={fridge}
-					placeholder="onions, garlic, a tomato, yoghurt, rice, whatever spices came in the starter pack…"
+					placeholder="rice, eggs, pasta, whatever spices came in the starter pack…"
 					onChange={(e) => setFridge(e.target.value)}
 				/>
 				<div style={{ marginTop: 12 }}>
-					<Button disabled={busy || fridge.trim().length < 3} onClick={onSubstitute}>
-						Can I make this tonight?
+					<Button disabled={busy || haveCount === 0} onClick={onSubstitute}>
+						{lacking.length ? `Check the ${lacking.length} I am missing` : 'Check what I can make'}
 					</Button>
 				</div>
 

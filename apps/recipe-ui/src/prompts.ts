@@ -298,6 +298,10 @@ export function buildSubstitutionQuestion(
 	Question: new (opts?: Record<string, unknown>) => QuestionLike,
 	recipe: Recipe,
 	fridge: string,
+	/** Ticked in the ingredient list: confirmed present. Not a guess. */
+	have: string[] = [],
+	/** Left unticked: confirmed absent. Not a guess either. */
+	lacking: string[] = [],
 ): QuestionLike {
 	const q = new Question({
 		expectJson: true,
@@ -340,7 +344,31 @@ export function buildSubstitutionQuestion(
 
 	q.addExample('Aloo jeera, but they have no potatoes', SUBSTITUTION_EXAMPLE);
 	q.addContext(`THE RECIPE:\n${JSON.stringify(recipe)}`);
-	q.addContext(`WHAT IS IN MY KITCHEN:\n${fridge.trim()}`);
+
+	// The ticks are the user telling us directly, item by item. Everything the
+	// old free-text-only version had to infer — did "the usual spices" cover the
+	// turmeric? — is now simply stated. Where a statement exists, guessing over
+	// the top of it is strictly worse.
+	if (have.length || lacking.length) {
+		q.addInstruction(
+			'The two lists below are facts, not hints',
+			'The cook went down the ingredient list and marked each one. HAVE means it is in ' +
+				'their kitchen; MISSING means it is not. Do not second-guess either list, do not ' +
+				'move an item between them, and do not mark something missing as "have" because ' +
+				'the dish would be easier that way. Set status to have for everything in HAVE. ' +
+				'For each item in MISSING, decide whether something in HAVE or in the free-text ' +
+				'note can stand in — status substitute with useInstead — or whether it genuinely ' +
+				'cannot, which is status missing.',
+		);
+		if (have.length) q.addContext(`HAVE (confirmed present):\n${have.join('\n')}`);
+		if (lacking.length) q.addContext(`MISSING (confirmed absent):\n${lacking.join('\n')}`);
+	}
+
+	q.addContext(
+		fridge.trim()
+			? `ALSO IN MY KITCHEN, beyond this recipe's ingredients:\n${fridge.trim()}`
+			: 'ALSO IN MY KITCHEN:\n(they did not say — assume only basics like salt, oil and water)',
+	);
 
 	return q;
 }

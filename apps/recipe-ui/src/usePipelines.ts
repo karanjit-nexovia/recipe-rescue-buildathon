@@ -250,8 +250,8 @@ export function usePipelines() {
 	);
 
 	const checkFridge = useCallback(
-		(recipe: Recipe, fridge: string) =>
-			ask<Substitution>((Q) => buildSubstitutionQuestion(Q as never, recipe, fridge)),
+		(recipe: Recipe, fridge: string, have: string[] = [], lacking: string[] = []) =>
+			ask<Substitution>((Q) => buildSubstitutionQuestion(Q as never, recipe, fridge, have, lacking)),
 		[ask],
 	);
 
