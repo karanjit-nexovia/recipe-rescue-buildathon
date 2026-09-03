@@ -522,6 +522,8 @@ const summarise = (r: Recipe, extra?: string): string =>
  * thirty seconds to reproduce two lists we are already holding.
  */
 export interface ShoppingItem {
+	/** Index into recipe.ingredients, so a tick here is the same tick as there. */
+	index: number;
 	item: string;
 	quantity?: string;
 	why?: string;
@@ -1745,6 +1747,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 			lacking
 				.filter((ing) => ing.item?.trim())
 				.map((ing) => ({
+					index: ingredients.indexOf(ing),
 					item: ing.item!.trim(),
 					quantity: ing.quantity ? scaleQuantity(ing.quantity, scale) : undefined,
 					// If the fridge check found a swap for it, that is worth knowing
@@ -1754,7 +1757,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 						? `Or swap: ${sub.lines.find((ln) => sameIngredient(ln.item, ing.item))?.useInstead}`
 						: undefined,
 				})),
-		[lacking, scale, sub],
+		[ingredients, lacking, scale, sub],
 	);
 
 	// A new fridge answer invalidates the old list; leaving the panel open would
@@ -1880,7 +1883,7 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 								<SubRow key={i} line={ln} />
 							))}
 						</div>
-					{(missing.length > 0 || sub.alternative) && (
+					{(missing.length > 0 || sub.alternative || shopping) && (
 							<div style={{ marginTop: 18 }}>
 								{/* Count what is actually rendered. The old copy said "Two ways
 								    forward" whenever anything was missing, but the second button
@@ -1912,15 +1915,36 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 									</div>
 								)}
 
-								{shopping && missing.length > 0 && (
+								{shopping && (
 									<div style={{ ...s.doneWhen, marginTop: 12 }}>
+										{missing.length > 0 ? (
+											<>
 										<strong>Buy these {missing.length}:</strong>
-										<div style={{ marginTop: 8 }}>
-											{missing.map((m, i) => (
-												<div key={i} style={s.ingRow}>
-													<div style={s.ingName}>{m.item}</div>
-													<div style={s.ingQty}>{m.quantity ?? '—'}</div>
-													{m.why && <div style={s.ingNote}>{m.why}</div>}
+										<p style={{ ...s.muted, marginTop: 6, marginBottom: 8 }}>
+											Tick them off as they go in the basket — the answer above updates as you shop.
+										</p>
+										<div>
+											{missing.map((m) => (
+												<div
+													key={m.index}
+													className="rx-ing"
+													onClick={() => onToggleIng(m.index)}
+													role="checkbox"
+													aria-checked={false}
+													tabIndex={0}
+													onKeyDown={(e) => {
+														if (e.key === 'Enter' || e.key === ' ') {
+															e.preventDefault();
+															onToggleIng(m.index);
+														}
+													}}
+												>
+													<div className="rx-ing-name">
+														<span className="rx-box">✓</span>
+														<span>{m.item}</span>
+													</div>
+													<div className="rx-ing-qty">{m.quantity ?? '—'}</div>
+													{m.why && <div className="rx-ing-note">{m.why}</div>}
 												</div>
 											))}
 										</div>
@@ -1928,23 +1952,30 @@ const RecipeView: React.FC<RecipeViewProps> = ({
 											<Button small variant="secondary" onClick={copyList}>
 												{copied ? 'Copied' : 'Copy the list'}
 											</Button>
-											{/* A handoff, not a claim: the maps app knows where the
-											    user is, so nothing here collects a location or
-											    asserts anything about stock, hours or price. */}
+											{/* A handoff, not a claim: the maps app knows where the user is, so
+											    nothing here collects a location or asserts anything about stock,
+											    hours or price. */}
 											<a
 												href={mapsUrl(storeQuery(recipe, missing))}
 												target="_blank"
 												rel="noopener noreferrer"
 												style={{ fontSize: 13, color: 'var(--rr-accent, #6b8afd)' }}
 											>
-												Find a {storeQuery(recipe, missing).replace(' grocery store', '')} grocery
-												store near you
+												Find a {storeQuery(recipe, missing).replace(' grocery store', '')} grocery store near you
 											</a>
 										</div>
-										<p style={{ ...s.muted, marginTop: 10, marginBottom: 0 }}>
-											Everything else on the list above you already have, or can swap for
-											something you have.
-										</p>
+											</>
+										) : (
+											<div style={{ textAlign: 'center', padding: '6px 0 2px' }}>
+												<strong>That is everything.</strong>
+												<p style={{ ...s.muted, marginTop: 6, marginBottom: 12 }}>
+													Nothing left to buy — you can cook this now.
+												</p>
+												<Button small onClick={onContinue}>
+													Show me the recipe
+												</Button>
+											</div>
+										)}
 									</div>
 								)}
 							</div>
