@@ -1579,6 +1579,27 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 						// heard. Say so rather than letting it pass as a full read.
 						transcript = outcome.text;
 
+						// THE TITLE WAS BEING FETCHED AND THROWN AWAY.
+						//
+						// A YouTube transcript is automatic captions: phonetic, and
+						// worst on the words that matter most here. One Short whose
+						// title reads "The BEST palak paneer ever" transcribes as
+						// "today let's make poock panade", and the app dutifully
+						// titled the recipe Poock Panade — a dish that does not
+						// exist — while getting every ingredient right.
+						//
+						// The title is typed by the cook, so it is the one place the
+						// real name survives. It rides along as corroboration, the
+						// same way an Instagram caption does, and the prompt is told
+						// it outranks the transcript on names.
+						const titled = (outcome.source.caption ?? '').trim();
+						if (titled) {
+							screenText =
+								'VIDEO TITLE (typed by the cook, so more reliable than the ' +
+								`machine transcript on any name):
+${titled}`;
+						}
+
 						// Below the evidence bar there is no recipe in here to find.
 						// A YouTube title is about thirty characters, and running
 						// extraction on it costs a model call and half a minute to

@@ -111,6 +111,20 @@ export function buildExtractionQuestion(
 		);
 	}
 
+	if (!described) {
+		q.addInstruction(
+			'The transcript is machine-made and mis-hears names',
+			'It comes from automatic captions, which are phonetic and fail hardest on exactly the ' +
+				'words that matter here: dish names, spice names and anything not in English. ' +
+				'"poock panade" is palak paneer. "gar mage" is garam masala. So do NOT copy a name ' +
+				'out of the transcript when it does not correspond to a dish that exists — work out ' +
+				'what is actually being cooked from the ingredients and the method, and title it ' +
+				'THAT, spelled properly. If a VIDEO TITLE or POST CAPTION is supplied below, it was ' +
+				'typed by the cook rather than transcribed, so it outranks the transcript on every ' +
+				'name it contains. Never invent a dish name that no one would recognise.',
+		);
+	}
+
 	q.addInstruction(
 		'Restore what the cook skipped',
 		'The person filming is an experienced home cook making a video for other experienced ' +
