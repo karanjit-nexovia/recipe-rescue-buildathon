@@ -635,6 +635,26 @@ const waitText = (elapsed: number): string => {
  * Null before 25 seconds: nothing has gone on long enough to need explaining,
  * and reassurance offered that early only plants the doubt it answers.
  */
+/**
+ * How long this particular reel is going to take, said before it takes it.
+ *
+ * Every stage that reads a video scales with its length: the audio, and above
+ * all the frame grab and OCR. 165 seconds was measured on a 38-second reel, and
+ * a 62-second one runs past four minutes — which reads as a hang to anyone who
+ * was told to expect two and a half minutes.
+ *
+ * Deliberately banded rather than a computed figure. The relationship is real
+ * but it has been measured at exactly two lengths, and a confident "3:47" from
+ * two data points is a worse lie than "around four minutes".
+ */
+const durationNote = (seconds: number | null): string | null => {
+	if (!seconds) return null;
+	const len = `${Math.round(seconds)}-second reel`;
+	if (seconds <= 45) return `A ${len}. These usually take about three minutes.`;
+	if (seconds <= 90) return `A ${len} — longer than most. Expect four to five minutes.`;
+	return `A ${len}, which is a long one. This will take five minutes or more.`;
+};
+
 const waitNote = (elapsed: number): string | null => {
 	if (elapsed <= 25) return null;
 	if (elapsed <= SLOW_SECONDS) return 'Reading a reel properly takes a while. It has not stalled.';
@@ -737,6 +757,10 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 	const [sourceMode, setSourceMode] = useState<SourceMode>('link');
 	const [busy, setBusy] = useState<string | null>(null);
 	const [elapsed, setElapsed] = useState(0);
+	/** Length of the reel being read, once the resolver has told us. Drives the
+	 *  wait estimate, which is the difference between a slow run and a hung one
+	 *  as far as the person watching is concerned. */
+	const [reelSeconds, setReelSeconds] = useState<number | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	/** A caveat about a result we did produce — distinct from a failure. */
 	const [notice, setNotice] = useState<string | null>(null);
@@ -915,6 +939,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			setError(null);
 			setNotice(null);
 			setSub(null);
+			setReelSeconds(null);
 			// Hand the screen over for the duration. Every caller of this is on
 			// the ingest form, and leaving them there greys out the only control
 			// on the page for two minutes; the wait deserves a screen of its own.
@@ -1001,6 +1026,8 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 						}
 					} else {
 						setBusy('Retrieving the video');
+						// Say how long this will take before it takes it.
+						setReelSeconds(outcome.source.durationSeconds ?? null);
 						caption = outcome.source.caption;
 						try {
 							file = await fetchWithOneRetry(outcome.source, payload.link);
@@ -1028,12 +1055,20 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 				}
 
 				if (file) {
-					// Every path through this block ends in an extraction, so the
-					// ask task is certain to be needed. Started here, its 8-second
-					// cold start happens while the audio is being read rather than
-					// after it — the one stage long enough to hide it completely.
-					prewarm('ask');
-
+					// The ask task is deliberately NOT warmed here, though every
+					// path through this block ends in an extraction.
+					//
+					// Warming it hides an 8-second cold start behind the audio —
+					// but only when nothing else follows. On a reel that escalates
+					// to the on-screen-text rung, extraction is more than TASK_TTL
+					// away, so the warmed task is reaped for idleness before it is
+					// ever used: the run pays three minutes of idle billing AND
+					// still eats the cold start. Measured on a 62-second reel,
+					// where the OCR stage alone outlasts the ttl.
+					//
+					// Eight seconds of a four-minute run is not worth that trade.
+					// transcribe is still warmed at the top, where the wait it
+					// hides behind is bounded by the resolve and the download.
 					setBusy('Listening to the reel');
 					const heard = await transcribe(file);
 					transcript = heard.transcript;
@@ -1360,7 +1395,9 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 						/>
 					)}
 
-					{view === 'cooking' && <CookingView stage={busy ?? 'Getting started'} elapsed={elapsed} />}
+					{view === 'cooking' && (
+						<CookingView stage={busy ?? 'Getting started'} elapsed={elapsed} seconds={reelSeconds} />
+					)}
 
 					{view === 'ingredients' && recipe && (
 						<Card
@@ -1660,8 +1697,14 @@ const PAN_BITS: Array<{ dx: number; dy: number; delay: number; shape: React.Reac
  * honest here as they were in the banner — the pan is what makes it bearable
  * to sit and read them.
  */
-const CookingView: React.FC<{ stage: string; elapsed: number }> = ({ stage, elapsed }) => {
-	const note = waitNote(elapsed);
+const CookingView: React.FC<{ stage: string; elapsed: number; seconds: number | null }> = ({
+	stage,
+	elapsed,
+	seconds,
+}) => {
+	// What the reel is going to cost gives way to how it is actually going once
+	// there is something to say about the run itself.
+	const note = waitNote(elapsed) ?? durationNote(seconds);
 	return (
 		<div className="rx-cooking rx-in">
 			<svg
