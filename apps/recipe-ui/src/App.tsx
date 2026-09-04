@@ -27,6 +27,8 @@ import {
 } from 'shell';
 
 import { MAX_VIDEO_BYTES, THIN_EVIDENCE_CHARS, usePipelines } from './usePipelines';
+import { CookingScreen } from './CookingScreen';
+import { mmss, SLOW_SECONDS } from './format';
 import {
 	detectPlatform,
 	fetchMediaAsFile,
@@ -470,6 +472,109 @@ const CSS = `
 .rx-hint { font-size: 11.5px; color: var(--rx-ink-soft); opacity: 0.75; margin-top: 14px; }
 
 /* ===========================================================================
+   THE MENU
+
+   The ticking step is the one screen in the flow that is a LIST above all
+   else, so it is set as a menu: a card of warm stock, a centred serif title,
+   rules top and bottom, and every line running name .......... quantity.
+
+   Dotted leaders are the whole trick. A menu uses them because the eye has to
+   travel a long way from a dish to its price without losing the row, which is
+   exactly the journey being made here — and unlike a table rule they cost no
+   ink and imply no grid.
+
+   Scoped under .rx-menu, deliberately. IngredientList is shared with the
+   recipe screen, where the same rows sit beside a method and must stay quiet.
+   =========================================================================== */
+.rx-menu {
+  background: var(--rx-card);
+  border: 1px solid var(--rx-line);
+  border-radius: 3px;
+  padding: 34px 30px 30px;
+  max-width: 620px;
+  margin: 0 auto;
+  /* Warm the stock towards the top so it reads as paper rather than as a
+     panel, without a texture image to load. */
+  background-image: linear-gradient(178deg, var(--rx-gold-wash) 0%, rgba(255,255,255,0) 42%);
+}
+@media (max-width: 560px) { .rx-menu { padding: 24px 18px 20px; } }
+
+.rx-menu-head { text-align: center; margin: 0 0 24px; }
+.rx-menu-rule { border: 0; border-top: 1px solid var(--rx-line); margin: 0; }
+.rx-menu-rule.is-double {
+  border-top: 3px double var(--rx-gold);
+  opacity: 0.55;
+}
+.rx-menu-head h2 {
+  font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  font-size: 26px; font-weight: 600; letter-spacing: -0.2px;
+  margin: 16px 0 8px; line-height: 1.2;
+}
+.rx-menu-kicker {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 2.4px; text-transform: uppercase;
+  color: var(--rx-gold); margin: 0;
+}
+.rx-menu-sub { font-size: 12.5px; color: var(--rx-ink-soft); margin: 8px 0 16px; line-height: 1.55; }
+
+/* The row: tick, name, leader, amount. The leader is a repeating gradient on
+   its own flex-filler, so it stretches to whatever gap the row leaves. */
+.rx-menu .rx-ing {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 0 10px;
+  padding: 9px 0;
+  border-bottom: 0;
+  cursor: pointer;
+}
+.rx-menu .rx-ing-name {
+  display: contents;
+}
+/* The name sits in the 1fr column and is itself a flex row: the words take
+   the width they need and the leader takes everything left over. As an
+   inline-block with width:100% it wrapped onto its own line — the leader has
+   to be a flex sibling of the text, not a box inside its flow. */
+.rx-menu .rx-ing-name > span:last-child {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 14.5px; min-width: 0;
+}
+.rx-menu .rx-ing-name > span:last-child::after {
+  content: '';
+  flex: 1 1 auto;
+  transform: translateY(-4px);
+  border-bottom: 1px dotted var(--rx-line);
+}
+.rx-menu .rx-ing-qty {
+  font-size: 13px; color: var(--rx-ink-soft); font-variant-numeric: tabular-nums;
+  white-space: nowrap; grid-column: 3;
+}
+/* Set as a menu's dish description: the note explains the line above it, and
+   italic serif says that without needing a label. */
+.rx-menu .rx-ing-note {
+  grid-column: 2 / -1; font-size: 12px; color: var(--rx-ink-soft);
+  opacity: 0.9; margin-top: 3px; line-height: 1.45;
+  font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  font-style: italic;
+}
+
+/* Ticked means "already in my kitchen", so the row steps back rather than
+   lighting up: what stays dark is what still has to be bought. */
+.rx-menu .rx-ing.is-done .rx-ing-name > span:last-child,
+.rx-menu .rx-ing.is-done .rx-ing-qty { color: var(--rx-ink-soft); opacity: 0.6; }
+
+.rx-menu .rx-box {
+  width: 17px; height: 17px; border-radius: 2px; font-size: 11px; line-height: 17px;
+  grid-column: 1; align-self: center;
+}
+
+.rx-menu .rx-group { margin-bottom: 22px; }
+.rx-menu .rx-group-name {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase;
+  color: var(--rx-ink-soft); margin: 0 0 6px; padding-top: 6px;
+}
+.rx-menu-foot { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--rx-line); }
+
+/* ===========================================================================
    THE COOKING SCREEN
 
    A link takes upwards of two minutes to become a recipe, and for most of it
@@ -654,11 +759,6 @@ const AMOUNT_RE =
 
 const statesAmounts = (text: string): boolean => (text.match(AMOUNT_RE)?.length ?? 0) >= 3;
 
-const mmss = (secs: number): string => {
-	const safe = Math.max(0, Math.round(secs));
-	return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, '0')}`;
-};
-
 const errText = (err: unknown): string => {
 	const msg = (err as Error)?.message ?? String(err);
 	if (/already running/i.test(msg)) return 'That pipeline is already running — try again in a moment.';
@@ -673,9 +773,6 @@ const errText = (err: unknown): string => {
 	}
 	return msg || 'Something went wrong.';
 };
-
-/** Past this, a run is slower than any measured reel and worth flagging. */
-const SLOW_SECONDS = 240;
 
 /**
  * What to say while the user waits.
@@ -698,32 +795,6 @@ const waitText = (elapsed: number): string => {
  * Null before 25 seconds: nothing has gone on long enough to need explaining,
  * and reassurance offered that early only plants the doubt it answers.
  */
-/**
- * How long this particular reel is going to take, said before it takes it.
- *
- * Every stage that reads a video scales with its length: the audio, and above
- * all the frame grab and OCR. 165 seconds was measured on a 38-second reel, and
- * a 62-second one runs past four minutes — which reads as a hang to anyone who
- * was told to expect two and a half minutes.
- *
- * Deliberately banded rather than a computed figure. The relationship is real
- * but it has been measured at exactly two lengths, and a confident "3:47" from
- * two data points is a worse lie than "around four minutes".
- */
-const durationNote = (seconds: number | null): string | null => {
-	if (!seconds) return null;
-	const len = `${Math.round(seconds)}-second reel`;
-	if (seconds <= 45) return `A ${len}. These usually take about three minutes.`;
-	if (seconds <= 90) return `A ${len} — longer than most. Expect four to five minutes.`;
-	return `A ${len}, which is a long one. This will take five minutes or more.`;
-};
-
-const waitNote = (elapsed: number): string | null => {
-	if (elapsed <= 25) return null;
-	if (elapsed <= SLOW_SECONDS) return 'Reading a reel properly takes a while. It has not stalled.';
-	return 'This is longer than a reel normally takes. It will stop on its own if nothing comes back — or start again with the caption box, which is quick.';
-};
-
 const summarise = (r: Recipe, extra?: string): string =>
 	[r.cuisine, r.servings ? `serves ${r.servings}` : null, r.totalMinutes ? `${r.totalMinutes} min` : null, extra]
 		.filter(Boolean)
@@ -824,6 +895,14 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 	 *  wait estimate, which is the difference between a slow run and a hung one
 	 *  as far as the person watching is concerned. */
 	const [reelSeconds, setReelSeconds] = useState<number | null>(null);
+	/**
+	 * Headline on the transition screen.
+	 *
+	 * The pan stands between every pair of steps, and each wait names its own
+	 * work: reading a reel is "Cooking your recipe", checking a ticked list
+	 * against the dish is "Making your list". One screen, one line changed.
+	 */
+	const [cookingTitle, setCookingTitle] = useState('Cooking your recipe');
 	const [error, setError] = useState<string | null>(null);
 	/** A caveat about a result we did produce — distinct from a failure. */
 	const [notice, setNotice] = useState<string | null>(null);
@@ -1005,6 +1084,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			// A dropped file already knows its own length; a link learns it from
 			// the resolver a few seconds from now.
 			setReelSeconds(payload.seconds ?? null);
+			setCookingTitle('Cooking your recipe');
 			// Hand the screen over for the duration. Every caller of this is on
 			// the ingest form, and leaving them there greys out the only control
 			// on the page for two minutes; the wait deserves a screen of its own.
@@ -1274,6 +1354,19 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 		inFlight.current = true;
 		setError(null);
 		setBusy('Checking what you can swap');
+
+		// Coming off the menu, this is a step change like any other, so it gets
+		// the transition screen rather than a banner over a list the reader has
+		// finished with. Re-running it from the verdict screen keeps the banner:
+		// there the reader is mid-page with something to look at, and taking the
+		// screen away from them would be the intrusion, not the courtesy.
+		const fromMenu = view === 'ingredients';
+		if (fromMenu) {
+			setCookingTitle('Making your list');
+			setReelSeconds(null);
+			setView('cooking');
+		}
+
 		try {
 			const all = recipe.ingredients ?? [];
 			const named = (list: Ingredient[]) =>
@@ -1289,11 +1382,14 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			setView('verdict');
 		} catch (err) {
 			setError(errText(err));
+			// Back to the menu they came from, with the error above it — never
+			// stranded on a transition screen for work that has stopped.
+			if (fromMenu) setView('ingredients');
 		} finally {
 			inFlight.current = false;
 			setBusy(null);
 		}
-	}, [checkFridge, doneIng, fridge, recipe]);
+	}, [checkFridge, doneIng, fridge, recipe, view]);
 
 	/**
 	 * Cook the fallback the substitution named instead.
@@ -1483,25 +1579,31 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 					)}
 
 					{view === 'cooking' && (
-						<CookingView stage={busy ?? 'Getting started'} elapsed={elapsed} seconds={reelSeconds} />
+						<CookingScreen
+							title={cookingTitle}
+							stage={busy ?? 'Getting started'}
+							elapsed={elapsed}
+							seconds={reelSeconds}
+						/>
 					)}
 
 					{view === 'ingredients' && recipe && (
-						<Card
-							header={recipe.title || 'Your recipe'}
-							headerActions={
-								<Button
-									disabled={!!busy || doneIng.length === 0}
-									onClick={() => void runSubstitute()}
-								>
-									{doneIng.length === 0 ? 'Tick what you have' : 'Next'}
-								</Button>
-							}
-						>
-							<p style={{ ...s.muted, marginTop: 0 }}>
+						<section className="rx-menu rx-in">
+							<div className="rx-menu-head">
+								<hr className="rx-menu-rule is-double" />
+								<p className="rx-menu-kicker" style={{ marginTop: 14 }}>
+									What this needs
+								</p>
+								<h2>{recipe.title || 'Your recipe'}</h2>
+								<hr className="rx-menu-rule" />
+							</div>
+
+							<p className="rx-menu-sub" style={{ textAlign: 'center' }}>
 								Tick everything you already have. Salt, oil and water are ticked for you —
-								untick them if you have actually run out.
+								untick them if you have actually run out. What stays unticked becomes your
+								shopping list.
 							</p>
+
 							<IngredientList
 								ingredients={recipe.ingredients ?? []}
 								grouped={groupIngredients(recipe.ingredients ?? [])}
@@ -1516,7 +1618,16 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 									MOSTLY_ESTIMATED
 								}
 							/>
-						</Card>
+
+							<div className="rx-menu-foot" style={{ ...s.row, justifyContent: 'center' }}>
+								<Button
+									disabled={!!busy || doneIng.length === 0}
+									onClick={() => void runSubstitute()}
+								>
+									{doneIng.length === 0 ? 'Tick what you have' : 'Make my list'}
+								</Button>
+							</div>
+						</section>
 					)}
 
 					{view === 'verdict' && recipe && (
@@ -1748,127 +1859,6 @@ const StepPips: React.FC<{ view: View }> = ({ view }) => {
 			{STEP_ORDER.map((_, i) => (
 				<span key={i} className={`rx-pip${i === at ? ' is-on' : i < at ? ' is-past' : ''}`} />
 			))}
-		</div>
-	);
-};
-
-/**
- * What is in the pan.
- *
- * Each bit carries its own arc rather than sharing one: five things thrown
- * along an identical path read as one object drawn five times. The delays are
- * small and uneven for the same reason.
- */
-const PAN_BITS: Array<{ dx: number; dy: number; delay: number; shape: React.ReactNode }> = [
-	{ dx: -40, dy: -58, delay: 0, shape: <circle cx="102" cy="131" r="5.5" fill="var(--rx-gold)" /> },
-	{
-		dx: -18,
-		dy: -72,
-		delay: 70,
-		shape: <rect x="114" y="125" width="10" height="10" rx="2" fill="var(--rx-gold-soft)" />,
-	},
-	{ dx: 2, dy: -78, delay: 130, shape: <circle cx="136" cy="130" r="4.5" fill="var(--rx-ink-soft)" opacity="0.5" /> },
-	{
-		dx: 24,
-		dy: -70,
-		delay: 55,
-		shape: <rect x="146" y="127" width="14" height="7" rx="3.5" fill="var(--rx-gold)" />,
-	},
-	{ dx: 44, dy: -54, delay: 20, shape: <circle cx="170" cy="132" r="6" fill="var(--rx-gold-soft)" /> },
-];
-
-/**
- * The waiting screen.
- *
- * Two minutes is a long time to hold someone on a form that has gone
- * unavailable, which is what a banner over the ingest page amounts to. This
- * takes the whole screen and shows the thing being made instead.
- *
- * The animation is the smaller half of it. The stage line and the counter are
- * what actually stop a long wait reading as a hang, so they stay exactly as
- * honest here as they were in the banner — the pan is what makes it bearable
- * to sit and read them.
- */
-const CookingView: React.FC<{ stage: string; elapsed: number; seconds: number | null }> = ({
-	stage,
-	elapsed,
-	seconds,
-}) => {
-	// What the reel is going to cost gives way to how it is actually going once
-	// there is something to say about the run itself.
-	const note = waitNote(elapsed) ?? durationNote(seconds);
-	return (
-		<div className="rx-cooking rx-in">
-			<svg
-				className="rx-stove"
-				viewBox="0 0 300 210"
-				role="img"
-				aria-label="A pan on the heat, tossing its ingredients"
-			>
-				{/* The burner and its heat, under everything. The flame tips stop
-				    just short of the pan base so they read as licking it rather
-				    than burning through it. */}
-				<g>
-					<path
-						d="M98 203h68"
-						stroke="var(--rx-ink-soft)"
-						strokeWidth="3"
-						strokeLinecap="round"
-						opacity="0.26"
-						fill="none"
-					/>
-					<path className="rx-flame" d="M116 201c-6-14 6-18 1-30 11 8 9 22-1 30z" fill="var(--rx-gold-soft)" />
-					<path
-						className="rx-flame rx-flame-2"
-						d="M134 202c-7-17 7-22 1-36 13 10 11 26-1 36z"
-						fill="var(--rx-gold)"
-					/>
-					<path
-						className="rx-flame rx-flame-3"
-						d="M152 201c-6-14 6-18 1-30 11 8 9 22-1 30z"
-						fill="var(--rx-gold-soft)"
-					/>
-				</g>
-
-				{/* The pan: line art, in the same ink as the type. */}
-				<g
-					className="rx-pan"
-					fill="none"
-					stroke="var(--rx-ink)"
-					strokeWidth="2.4"
-					strokeLinecap="round"
-					strokeLinejoin="round"
-				>
-					<ellipse cx="132" cy="126" rx="56" ry="12" />
-					<path d="M76 126c2 30 30 42 56 42s54-12 56-42" />
-					<path d="M188 122l68-19" strokeWidth="5" />
-					<path d="M252 105l14-4" strokeWidth="7" stroke="var(--rx-ink-soft)" opacity="0.55" />
-				</g>
-
-				{/* Painted after the pan so the toss passes in front of its rim. */}
-				<g>
-					{PAN_BITS.map((bit, i) => (
-						<g
-							key={i}
-							className="rx-bit"
-							style={
-								{
-									'--dx': `${bit.dx}px`,
-									'--dy': `${bit.dy}px`,
-									animationDelay: `${bit.delay}ms`,
-								} as React.CSSProperties
-							}
-						>
-							{bit.shape}
-						</g>
-					))}
-				</g>
-			</svg>
-
-			<h2>Cooking your recipe</h2>
-			<p className="rx-stage">{stage}</p>
-			<p className={`rx-clock${elapsed > SLOW_SECONDS ? ' rx-warn' : ''}`}>{mmss(elapsed)}</p>
-			{note && <p className="rx-reassure">{note}</p>}
 		</div>
 	);
 };
