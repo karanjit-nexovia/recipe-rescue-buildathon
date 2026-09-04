@@ -28,6 +28,10 @@ import {
 
 import { MAX_VIDEO_BYTES, THIN_EVIDENCE_CHARS, usePipelines } from './usePipelines';
 import { CookingScreen } from './CookingScreen';
+import { CelebrateScreen } from './CelebrateScreen';
+import { ForkScreen } from './ForkScreen';
+import { GroceryScreen } from './GroceryScreen';
+import { PotScreen } from './PotScreen';
 import { mmss, SLOW_SECONDS } from './format';
 import {
 	detectPlatform,
@@ -143,6 +147,14 @@ type View =
 	/** The wait between handing over a link and having a recipe. Its own screen
 	 *  because it lasts minutes, not because there is anything to do on it. */
 	| 'cooking'
+	/** The wait while the model works out what these ingredients can become. */
+	| 'improvising'
+	/** Everything ticked. No call to make, and the best news the app has. */
+	| 'celebrate'
+	/** Something missing: go and get it, or cook something else. */
+	| 'fork'
+	/** The list of what to buy, and the kind of shop that stocks it. */
+	| 'grocery'
 	| 'ingredients'
 	| 'verdict'
 	| 'recipe'
@@ -470,6 +482,134 @@ const CSS = `
 .rx-dot.is-on { background: var(--rx-gold); transform: scale(1.4); }
 .rx-dot.is-past { background: var(--rx-ink-soft); opacity: 0.45; }
 .rx-hint { font-size: 11.5px; color: var(--rx-ink-soft); opacity: 0.75; margin-top: 14px; }
+
+/* ===========================================================================
+   THE FORK IN THE ROAD, AND THE THREE ROADS OUT
+
+   Ticking the menu ends in one of three places, and each gets its own screen
+   rather than three states of one. The shared vocabulary is the ink line art
+   and the single gold accent; what differs is the motion, because the motion
+   is what says which of the three happened before a word is read.
+   =========================================================================== */
+
+/* --- the celebration: nothing is missing ------------------------------- */
+.rx-celebrate { text-align: center; padding: 26px 0 8px; }
+.rx-celebrate h2 { font-size: 28px; margin: 4px 0 12px; }
+.rx-celebrate p { font-size: 14px; color: var(--rx-ink-soft); margin: 0 auto 22px; max-width: 420px; line-height: 1.6; }
+.rx-scene { display: block; width: 100%; max-width: 280px; margin: 0 auto 22px; overflow: visible; }
+
+/* Steam is the one thing on this screen that keeps moving. Everything else
+   fires once and settles — a celebration that loops is a spinner. */
+@keyframes rx-steam {
+  0%   { opacity: 0; transform: translateY(4px) scaleX(0.9); }
+  30%  { opacity: 0.75; }
+  100% { opacity: 0; transform: translateY(-22px) scaleX(1.25); }
+}
+.rx-steam { transform-box: fill-box; transform-origin: center bottom; animation: rx-steam 2600ms ease-out infinite; }
+.rx-steam-2 { animation-delay: 700ms; }
+.rx-steam-3 { animation-delay: 1400ms; }
+
+@keyframes rx-burst {
+  0%   { opacity: 0; transform: translate(0, 0) scale(0.4); }
+  35%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--bx), var(--by)) scale(1); }
+}
+.rx-spark {
+  transform-box: fill-box; transform-origin: center;
+  animation: rx-burst 1100ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+/* --- the fork: two ways forward ---------------------------------------- */
+.rx-fork { max-width: 620px; margin: 0 auto; text-align: center; }
+.rx-fork > h2 { font-size: 25px; margin: 0 0 8px; }
+.rx-fork > p { font-size: 13.5px; color: var(--rx-ink-soft); margin: 0 0 24px; line-height: 1.6; }
+.rx-ways { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 620px) { .rx-ways { grid-template-columns: 1fr 1fr; } }
+
+/* They pop in rather than appear, one after the other, because a choice
+   offered a beat apart reads as two options — arriving together it reads as
+   a wall of buttons. */
+@keyframes rx-pop-in {
+  0%   { opacity: 0; transform: translateY(14px) scale(0.96); }
+  60%  { transform: translateY(-3px) scale(1.01); }
+  100% { opacity: 1; transform: none; }
+}
+.rx-way {
+  background: var(--rx-card); border: 1px solid var(--rx-line); border-radius: 4px;
+  padding: 22px 20px; text-align: left; cursor: pointer; width: 100%;
+  font: inherit; color: inherit;
+  animation: rx-pop-in 420ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  transition: border-color 140ms ease, transform 140ms ease;
+}
+.rx-way:nth-child(2) { animation-delay: 130ms; }
+.rx-way:hover { border-color: var(--rx-gold); transform: translateY(-2px); }
+.rx-way:focus-visible { outline: 2px solid var(--rx-gold); outline-offset: 2px; }
+.rx-way-icon { display: block; margin-bottom: 12px; }
+.rx-way h3 {
+  font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  font-size: 17px; font-weight: 600; margin: 0 0 6px;
+}
+.rx-way p { font-size: 12.5px; color: var(--rx-ink-soft); margin: 0; line-height: 1.5; }
+
+/* --- the grocery run ---------------------------------------------------- */
+.rx-grocery { max-width: 560px; margin: 0 auto; text-align: center; }
+.rx-grocery h2 { font-size: 25px; margin: 0 0 8px; }
+.rx-grocery > p { font-size: 13.5px; color: var(--rx-ink-soft); margin: 0 0 20px; line-height: 1.6; }
+
+/* Each item drops into the basket a beat after the one before. The stagger is
+   the whole effect: a list that appears all at once is a list, and a list that
+   arrives item by item is a basket filling up. */
+@keyframes rx-drop-in {
+  0%   { opacity: 0; transform: translateY(-16px) rotate(-6deg); }
+  70%  { transform: translateY(2px) rotate(1deg); }
+  100% { opacity: 1; transform: none; }
+}
+.rx-buy {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: 0 12px;
+  padding: 11px 14px; text-align: left;
+  border-bottom: 1px solid var(--rx-line);
+  animation: rx-drop-in 380ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+.rx-buy:last-child { border-bottom: 0; }
+.rx-buy-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rx-gold); align-self: center; }
+.rx-buy-name { font-size: 14.5px; }
+.rx-buy-qty { font-size: 12.5px; color: var(--rx-ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rx-buy-why { grid-column: 2 / -1; font-size: 11.5px; color: var(--rx-ink-soft); font-style: italic; margin-top: 3px; }
+.rx-basket-list {
+  background: var(--rx-card); border: 1px solid var(--rx-line); border-radius: 4px;
+  padding: 4px 0; margin-bottom: 20px; text-align: left;
+}
+.rx-where { animation: rx-pop-in 420ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+
+/* --- the mystery pot ---------------------------------------------------- */
+.rx-pot-screen { text-align: center; padding: 26px 0 8px; }
+.rx-pot-screen h2 { font-size: 25px; margin: 0 0 12px; }
+.rx-pot-screen .rx-stage { font-size: 15px; color: var(--rx-ink); margin: 0 0 10px; }
+
+/* An ellipse traced by hand, because a circular orbit on a pot seen from
+   slightly above reads as a ring hovering over it rather than as stirring.
+   --r scales each bit's radius so they ride at different depths. */
+@keyframes rx-swirl {
+  0%    { transform: translate(calc(40px * var(--r)), 0); }
+  12.5% { transform: translate(calc(28px * var(--r)), calc(8px * var(--r))); }
+  25%   { transform: translate(0, calc(11px * var(--r))); }
+  37.5% { transform: translate(calc(-28px * var(--r)), calc(8px * var(--r))); }
+  50%   { transform: translate(calc(-40px * var(--r)), 0); }
+  62.5% { transform: translate(calc(-28px * var(--r)), calc(-8px * var(--r))); }
+  75%   { transform: translate(0, calc(-11px * var(--r))); }
+  87.5% { transform: translate(calc(28px * var(--r)), calc(-8px * var(--r))); }
+  100%  { transform: translate(calc(40px * var(--r)), 0); }
+}
+.rx-swirl { transform-box: fill-box; transform-origin: center; animation: rx-swirl 4600ms linear infinite; }
+
+@keyframes rx-stir { 0%, 100% { transform: rotate(-13deg); } 50% { transform: rotate(11deg); } }
+.rx-spoon { transform-box: fill-box; transform-origin: 12% 96%; animation: rx-stir 2300ms ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rx-steam, .rx-spark, .rx-way, .rx-buy, .rx-where, .rx-swirl, .rx-spoon { animation: none; }
+  .rx-spark { opacity: 0; }
+  .rx-way:hover { transform: none; }
+}
 
 /* ===========================================================================
    THE MENU
@@ -1347,6 +1487,50 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 
 	// ---------------------------------------------------------- substitution
 
+	/**
+	 * What is not ticked, ready to be shopped for.
+	 *
+	 * Derived, never asked for: the recipe already holds the amounts and the
+	 * ticks already say what is missing, so joining them costs nothing. If a
+	 * substitution has been run it contributes a swap note, but it is not
+	 * required — the grocery road never runs one.
+	 */
+	const missingItems = useMemo<ShoppingItem[]>(() => {
+		const all = recipe?.ingredients ?? [];
+		return all
+			.map((ing, index) => ({ ing, index }))
+			.filter(({ ing, index }) => !doneIng.includes(index) && ing.item?.trim())
+			.map(({ ing, index }) => {
+				const swap = sub?.lines?.find(
+					(ln) => ln.status === 'substitute' && sameIngredient(ln.item, ing.item),
+				)?.useInstead;
+				return {
+					index,
+					item: ing.item!.trim(),
+					quantity: ing.quantity ? scaleQuantity(ing.quantity, scale) : undefined,
+					why: swap ? `Or swap: ${swap}` : undefined,
+				};
+			});
+	}, [doneIng, recipe, scale, sub]);
+
+	/**
+	 * The fork out of the menu.
+	 *
+	 * Nothing missing means there is nothing to ask a model — no substitution
+	 * to work out, no list to build — so that branch costs nothing, waits for
+	 * nothing, and goes straight to the good news. Anything missing goes to the
+	 * choice, and the model is only troubled if they choose to improvise.
+	 *
+	 * This is why neither branch shows a transition screen: there is no work
+	 * behind either of them to wait for.
+	 */
+	const onMakeList = useCallback(() => {
+		if (!recipe) return;
+		const total = (recipe.ingredients ?? []).length;
+		setError(null);
+		setView(doneIng.length >= total ? 'celebrate' : 'fork');
+	}, [doneIng.length, recipe]);
+
 	const runSubstitute = useCallback(async () => {
 		// The ticks are the answer now, so an empty free-text box is fine — but
 		// having ticked nothing at all is not an answer, it is an unanswered form.
@@ -1355,17 +1539,13 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 		setError(null);
 		setBusy('Checking what you can swap');
 
-		// Coming off the menu, this is a step change like any other, so it gets
-		// the transition screen rather than a banner over a list the reader has
-		// finished with. Re-running it from the verdict screen keeps the banner:
-		// there the reader is mid-page with something to look at, and taking the
-		// screen away from them would be the intrusion, not the courtesy.
-		const fromMenu = view === 'ingredients';
-		if (fromMenu) {
-			setCookingTitle('Making your list');
-			setReelSeconds(null);
-			setView('cooking');
-		}
+		// Chosen from the fork, this is a step change like any other, so it gets
+		// its own screen — the pot, because what comes back is genuinely unknown
+		// until it arrives. Re-running it from the verdict screen keeps the
+		// banner: there the reader is mid-page with something to look at, and
+		// taking the screen away would be the intrusion, not the courtesy.
+		const fromFork = view === 'fork';
+		if (fromFork) setView('improvising');
 
 		try {
 			const all = recipe.ingredients ?? [];
@@ -1382,9 +1562,10 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			setView('verdict');
 		} catch (err) {
 			setError(errText(err));
-			// Back to the menu they came from, with the error above it — never
-			// stranded on a transition screen for work that has stopped.
-			if (fromMenu) setView('ingredients');
+			// Back to the choice they came from, with the error above it — never
+			// stranded on a transition screen for work that has stopped. The
+			// other road out of that screen still works.
+			if (fromFork) setView('fork');
 		} finally {
 			inFlight.current = false;
 			setBusy(null);
@@ -1540,7 +1721,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 					    the banner would be saying it twice. Substitution and the
 					    alternative dish still run behind the verdict screen, and
 					    those keep the banner. */}
-					{busy && view !== 'cooking' && (
+					{busy && view !== 'cooking' && view !== 'improvising' && (
 						<Banner variant={elapsed > SLOW_SECONDS ? 'warning' : 'info'}>
 							{busy} — {elapsed}s{waitText(elapsed)}
 						</Banner>
@@ -1620,14 +1801,43 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 							/>
 
 							<div className="rx-menu-foot" style={{ ...s.row, justifyContent: 'center' }}>
-								<Button
-									disabled={!!busy || doneIng.length === 0}
-									onClick={() => void runSubstitute()}
-								>
+								<Button disabled={!!busy || doneIng.length === 0} onClick={onMakeList}>
 									{doneIng.length === 0 ? 'Tick what you have' : 'Make my list'}
 								</Button>
 							</div>
 						</section>
+					)}
+
+					{view === 'celebrate' && recipe && (
+						<CelebrateScreen
+							title={recipe.title}
+							count={doneIng.length}
+							onShowRecipe={() => setView('recipe')}
+						/>
+					)}
+
+					{view === 'fork' && recipe && (
+						<ForkScreen
+							missingCount={(recipe.ingredients ?? []).length - doneIng.length}
+							missingNames={missingItems.map((m) => m.item)}
+							busy={!!busy}
+							onShop={() => setView('grocery')}
+							onImprovise={() => void runSubstitute()}
+						/>
+					)}
+
+					{view === 'improvising' && (
+						<PotScreen stage={busy ?? 'Working out what you can make'} elapsed={elapsed} />
+					)}
+
+					{view === 'grocery' && recipe && (
+						<GroceryScreen
+							items={missingItems}
+							storeKind={storeQuery(recipe, missingItems)}
+							storeUrl={mapsUrl(storeQuery(recipe, missingItems))}
+							onBack={() => setView('fork')}
+							onShowRecipe={() => setView('recipe')}
+						/>
 					)}
 
 					{view === 'verdict' && recipe && (
