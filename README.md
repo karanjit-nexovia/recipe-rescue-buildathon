@@ -46,7 +46,7 @@ whether tonight is even possible.
 
 | | |
 |---|---|
-| **Ingest** | Paste an Instagram, TikTok or YouTube link, upload a video, or just describe the dish. YouTube arrives as a spoken transcript; a blocked video download falls back to the post caption. |
+| **Ingest** | Paste a YouTube or TikTok link, or just describe the dish. YouTube arrives as a spoken transcript. Instagram and video upload are built and working but **paused for judging** — see below. |
 | **Extract** | Audio, then on-screen text, then vision — each escalated only when the one before came back short. |
 | **Ground** | Vague amounts become concrete ones, marked as estimates. "All the usual spices" becomes a named list with quantities. Steps are reordered the way one person actually works. |
 | **Cue** | Every step that can go wrong gets a sensory cue: *"the seeds sizzle and start popping, and smell toasty — not dark brown"*. |
@@ -167,6 +167,23 @@ Not a list of technologies — the specific problems that had to be solved:
 - **Scope discipline.** Five substantial features were cut on purpose, each for a stated
   reason. Those are recorded in [docs/DECISIONS.md](docs/DECISIONS.md), because what was
   deliberately *not* built is the more useful half of the record.
+
+## Instagram is paused, on purpose
+
+Reading a **video** is the only expensive thing this app does: about 760 platform tokens a
+run, measured from the billing ledger, against roughly 33 for a text run. That is a 23x
+difference, and it is structural rather than incidental — only two paths reach the video
+pipeline at all, an Instagram link and a dropped file, and everything else is text.
+
+The competition budget is fixed and has to cover every judge and every tester. At video
+prices that is two or three runs; at text prices it is fifty. So both video paths are
+closed behind a single flag (`VIDEO_PAUSED` in `src/mediaSource.ts`) and the app says so
+plainly rather than failing quietly.
+
+Nothing is deleted. The resolver, the escalation ladder (audio → on-screen text → vision),
+the 45-second reel cap and the caption-or-video question are all intact and tested;
+clearing one constant turns them back on. The decision is about a budget, not about the
+code, and it is recorded here so it reads as the former.
 
 ## Status
 

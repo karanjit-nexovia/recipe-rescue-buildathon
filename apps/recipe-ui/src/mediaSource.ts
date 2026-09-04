@@ -210,6 +210,16 @@ async function getJson(url: string, timeoutMs: number, init?: RequestInit): Prom
 }
 
 async function resolveInstagram(raw: string): Promise<ResolveOutcome> {
+	// Refused before the actor run, so a pasted reel costs nothing anywhere.
+	if (VIDEO_PAUSED) {
+		throw new ResolveError(
+			'not-configured',
+			`Instagram reels are paused for the competition. ${VIDEO_PAUSED_REASON} ` +
+				'A TikTok or YouTube link works now, or paste the recipe text, or just tell me the ' +
+				'dish and I will write it.',
+		);
+	}
+
 	const canonicalUrl = canonicaliseInstagram(raw);
 
 	if (!RESOLVER_ENDPOINT) {
@@ -250,7 +260,11 @@ async function resolveTikTok(raw: string): Promise<ResolveOutcome> {
 
 	const caption = (data.title ?? '').trim();
 	if (!caption) {
-		throw new ResolveError('no-media', 'That TikTok has no caption to read. Download the video and drop it in instead.');
+		throw new ResolveError(
+			'no-media',
+			'That TikTok has no caption to read. Paste the recipe text below, or tell me the dish ' +
+				'and I will write it.',
+		);
 	}
 	const source: MediaSource = {
 		platform: 'tiktok',
@@ -361,8 +375,31 @@ const PROVIDERS: Record<Exclude<Platform, 'unsupported'>, (raw: string) => Promi
 };
 
 /** Providers the UI should advertise as working right now. */
+/**
+ * VIDEO IS PAUSED FOR THE COMPETITION — remove after 2026-09-06.
+ *
+ * Reading a video is the only expensive thing this app does: roughly 760
+ * platform tokens a run against a balance that has to cover every judge and
+ * every tester between now and the deadline, where a text run costs about 33.
+ * Two paths reach it — an Instagram link, and a video dropped from disk — and
+ * both are closed here rather than one, because the reason applies identically
+ * to each and a "drop the video here" box beside a notice explaining that
+ * Instagram is off for cost reasons would simply be the same hole, unlabelled.
+ *
+ * Nothing about the pipeline is deleted. transcribe, screentext and vision are
+ * intact, the reel cap and the caption question are intact, and lifting this
+ * one constant turns them all back on.
+ */
+export const VIDEO_PAUSED = true;
+
+export const VIDEO_PAUSED_REASON =
+	'Reading a video costs about twenty times what reading text does, and this is running on a ' +
+	'fixed competition budget that has to last every person who tries it. Instagram links and ' +
+	'video uploads are off until judging closes.';
+
 export function verifiedProviders(): string[] {
 	const names = ['TikTok', 'YouTube'];
+	if (VIDEO_PAUSED) return names;
 	return RESOLVER_ENDPOINT ? ['Instagram', ...names] : names;
 }
 
@@ -374,8 +411,8 @@ export async function resolveMediaSource(raw: string): Promise<ResolveOutcome> {
 			kind: 'unsupported',
 			platform,
 			message:
-				`Links work for ${verifiedProviders().join(', ')}. For anything else, ` +
-				'paste the recipe text below or drop the video file in.',
+				`Links work for ${verifiedProviders().join(', ')}. For anything else, paste the ` +
+				'recipe text below, or tell me the dish and I will write it.',
 		};
 	}
 	return PROVIDERS[platform](raw);

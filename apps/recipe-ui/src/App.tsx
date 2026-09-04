@@ -42,6 +42,8 @@ import {
 	resolveMediaSource,
 	ResolveError,
 	verifiedProviders,
+	VIDEO_PAUSED,
+	VIDEO_PAUSED_REASON,
 } from './mediaSource';
 import type { MediaSource, ResolveOutcome } from './mediaSource';
 import type { Ingredient, Recipe, SavedRecipe, Step, SubLine, Substitution } from './types';
@@ -1594,8 +1596,8 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 								outcome.source.platform === 'youtube'
 									? 'YouTube only hands over the video title — “' +
 											transcript.trim() +
-											'” — and never the description, which is where the recipe is. Open the video, copy the description into the box below, or save the video and drop it in.'
-									: 'That link only gave a few words, not enough to build a recipe from. Paste the caption into the box below, or drop the video in.',
+											'” — and never the description, which is where the recipe is. Open the video and copy the description into the box below.'
+									: 'That link only gave a few words, not enough to build a recipe from. Paste the caption into the box below, or tell me the dish and I will write it.',
 							);
 						}
 
@@ -1672,7 +1674,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 							setNotice(
 								`${errText(err)} Built this from the post caption instead — it is often the ` +
 									'full recipe, but nothing spoken or shown only on screen made it in. ' +
-									'For the complete version, save the video and drop it in below.',
+									'Paste the full caption below if this one reads thin.',
 							);
 						}
 					}
@@ -1774,8 +1776,8 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 					throw new Error(
 						`That ${source} showed the cooking but never explained it — no spoken steps, and ` +
 							`nothing readable on screen — so there is no method to give you, and a recipe ` +
-							`without one is no use.${why} If the post has the recipe written underneath, ` +
-							`paste that in below; it works better than the video on reels like this one.`,
+							`without one is no use.${why} Paste the recipe text below if the post has one, or ` +
+							`let me write the dish from its name.`,
 					);
 				}
 
@@ -2420,19 +2422,21 @@ const IngestView: React.FC<{
 				<>
 			<Card header="Paste a cooking video or recipe link">
 				<p style={{ ...s.muted, marginTop: 0 }}>
-					Verified for {verifiedProviders().join(', ')}. Anything else — paste the recipe
-					text below, or drop the video file in.
+					Working now for {verifiedProviders().join(' and ')}. Anything else — paste the
+					recipe text below, or tell me the dish and I will write it.
 				</p>
-				<p style={{ ...s.muted, marginTop: 0 }}>
-					Reels of <strong>{SUGGESTED_REEL_RANGE}</strong> work best, and during the
-					competition anything over {MAX_REEL_SECONDS} seconds is turned away — reading a
-					video costs credits for every second of it.
-				</p>
+				{VIDEO_PAUSED && (
+					<Banner variant="info">
+						<strong>Instagram and video uploads are paused for the competition.</strong>{' '}
+						{VIDEO_PAUSED_REASON} A YouTube link reads what the cook actually said, and costs
+						a fraction of a video — so it is the one to try.
+					</Banner>
+				)}
 				<div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
 					<input
 						style={{ ...s.textarea, minHeight: 0, flex: '1 1 22rem', padding: '10px 12px' }}
 						value={link}
-						placeholder="https://www.instagram.com/reel/… or a TikTok link"
+						placeholder="https://www.youtube.com/watch?v=… or a TikTok link"
 						onChange={(e) => setLink(e.target.value)}
 						onKeyDown={(e) => {
 							if (e.key === 'Enter') submitLink();
@@ -2444,11 +2448,16 @@ const IngestView: React.FC<{
 				</div>
 			</Card>
 
-			<DropZone
-				title="Or drop the video here"
-				hint={`One at a time — MP4, MOV or WEBM, up to ${MAX_REEL_SECONDS} seconds. Works even when the reel has no words at all.`}
-				onFiles={onFiles}
-			/>
+			{/* The upload box is hidden, not deleted: onFiles, the duration probe
+			    and the whole video pipeline behind it are untouched, and clearing
+			    VIDEO_PAUSED brings it straight back. */}
+			{!VIDEO_PAUSED && (
+				<DropZone
+					title="Or drop the video here"
+					hint={`One at a time — MP4, MOV or WEBM, up to ${MAX_REEL_SECONDS} seconds. Works even when the reel has no words at all.`}
+					onFiles={onFiles}
+				/>
+			)}
 				</>
 			)}
 
@@ -2517,8 +2526,8 @@ const SourceView: React.FC<{ onPick: (mode: SourceMode) => void }> = ({ onPick }
 			<button type="button" className="rx-choice" onClick={() => onPick('link')}>
 				<b>I have a link</b>
 				<span>
-					Paste a reel from Instagram, TikTok or YouTube — or drop the video file straight in.
-					This is the one that reads what the cook actually did.
+					A YouTube or TikTok link. YouTube gives me what the cook actually said, which is
+					the next best thing to standing in the kitchen with them.
 				</span>
 			</button>
 			<button type="button" className="rx-choice" onClick={() => onPick('describe')}>
