@@ -484,6 +484,92 @@ const CSS = `
 .rx-hint { font-size: 11.5px; color: var(--rx-ink-soft); opacity: 0.75; margin-top: 14px; }
 
 /* ===========================================================================
+   COOK MODE: THE STEAMY KITCHEN
+
+   Cook mode is the only screen someone stands in front of for half an hour
+   with a pan going, so it is the one screen allowed an atmosphere. Soft
+   clouds drift behind the step, slowly enough that they are never the thing
+   being looked at — the step is 25px and sits on a solid card above them.
+
+   Drawn as blurred radial gradients rather than images: nothing to load,
+   nothing to go wrong offline, and they tint with the palette for free.
+   =========================================================================== */
+/* The card the step sits on is opaque, so clouds placed only behind it are
+   clouds nobody sees. The wrapper is padded to open a band around the card for
+   them to drift through, and one more passes ABOVE it at low opacity, which is
+   what makes the screen feel steamy rather than merely bordered. */
+.rx-steamy { position: relative; isolation: isolate; padding: 34px 26px; }
+@media (max-width: 560px) { .rx-steamy { padding: 22px 8px; } }
+.rx-steamy > .rx-clouds {
+  position: absolute; inset: 0; z-index: -1;
+  overflow: hidden; border-radius: 14px; pointer-events: none;
+  background: linear-gradient(170deg, rgba(184,145,47,0.05), rgba(184,145,47,0) 60%);
+}
+.rx-cloud {
+  position: absolute; border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, rgba(184,145,47,0.30), rgba(184,145,47,0) 70%);
+  filter: blur(10px);
+  animation: rx-drift 26s ease-in-out infinite;
+}
+.rx-cloud:nth-child(1) { width: 340px; height: 220px; top: -60px; left: -70px; }
+.rx-cloud:nth-child(2) { width: 300px; height: 200px; bottom: -70px; right: -60px; animation-duration: 34s; animation-delay: -8s; }
+.rx-cloud:nth-child(3) { width: 420px; height: 250px; bottom: -90px; left: 18%; animation-duration: 30s; animation-delay: -16s;
+  background: radial-gradient(circle at 50% 50%, rgba(109,101,89,0.20), rgba(109,101,89,0) 70%); }
+
+/* Passes over the top of everything. Low enough that the 25px step reads
+   straight through it, and it never takes a click. */
+.rx-steamy > .rx-drifting {
+  position: absolute; inset: 0; z-index: 2; overflow: hidden;
+  pointer-events: none; border-radius: 14px;
+}
+/* Weak on purpose, and kept to the edges. A first pass at half opacity across
+   the middle visibly greyed the step text — and the step is the one thing on
+   this screen that must never be harder to read than it was. */
+.rx-steamy > .rx-drifting .rx-cloud {
+  width: 420px; height: 260px; top: -8%; left: -22%;
+  background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.9), rgba(255,255,255,0) 66%);
+  filter: blur(26px); opacity: 0.26;
+  animation-duration: 40s;
+}
+.rx-steamy > .rx-drifting .rx-cloud:nth-child(2) {
+  top: auto; bottom: -8%; left: auto; right: -22%;
+  width: 360px; height: 230px; animation-duration: 48s; animation-delay: -20s;
+}
+@keyframes rx-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33%      { transform: translate(22px, -14px) scale(1.08); }
+  66%      { transform: translate(-16px, 10px) scale(0.95); }
+}
+
+/* ===========================================================================
+   THE ENDING
+
+   Finishing a dish is the moment the whole app exists for, and it is also the
+   only honest moment to ask someone to keep the recipe: they know NOW whether
+   it was any good. So the question is asked here and nowhere else.
+   =========================================================================== */
+.rx-finish { text-align: center; max-width: 520px; margin: 0 auto; padding: 18px 0 8px; }
+.rx-finish h2 { font-size: 29px; margin: 6px 0 12px; line-height: 1.2; }
+.rx-finish > p { font-size: 14px; color: var(--rx-ink-soft); margin: 0 0 24px; line-height: 1.6; }
+
+.rx-ask { font-size: 12.5px; color: var(--rx-ink-soft); margin: 0 0 12px; }
+.rx-rate { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 26px; }
+.rx-rate button {
+  font: inherit; font-size: 13px; cursor: pointer;
+  background: var(--rx-card); color: var(--rx-ink);
+  border: 1px solid var(--rx-line); border-radius: 999px; padding: 8px 16px;
+  transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
+}
+.rx-rate button:hover { border-color: var(--rx-gold); transform: translateY(-1px); }
+.rx-rate button.is-on { background: var(--rx-gold); border-color: var(--rx-gold); color: #fff; }
+.rx-rate button:focus-visible { outline: 2px solid var(--rx-gold); outline-offset: 2px; }
+.rx-said {
+  font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  font-style: italic; font-size: 14.5px; color: var(--rx-ink);
+  margin: 0 0 22px; animation: rx-pop-in 380ms cubic-bezier(0.2,0.7,0.3,1) both;
+}
+
+/* ===========================================================================
    THE FORK IN THE ROAD, AND THE THREE ROADS OUT
 
    Ticking the menu ends in one of three places, and each gets its own screen
@@ -606,9 +692,10 @@ const CSS = `
 .rx-spoon { transform-box: fill-box; transform-origin: 12% 96%; animation: rx-stir 2300ms ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .rx-steam, .rx-spark, .rx-way, .rx-buy, .rx-where, .rx-swirl, .rx-spoon { animation: none; }
+  .rx-steam, .rx-spark, .rx-way, .rx-buy, .rx-where, .rx-swirl, .rx-spoon,
+  .rx-cloud, .rx-said { animation: none; }
   .rx-spark { opacity: 0; }
-  .rx-way:hover { transform: none; }
+  .rx-way:hover, .rx-rate button:hover { transform: none; }
 }
 
 /* ===========================================================================
@@ -1919,6 +2006,11 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 							first={cooksSoFar <= 1}
 							isSaved={!!savedId}
 							canSave={loaded}
+							// The improvised road ends here too, and the sentence should
+							// know which road it was: cooking the dish you set out to cook
+							// and rescuing dinner from what was in the fridge are not the
+							// same achievement, and only one of them is worth naming.
+							improvised={recipe?.origin === 'kitchen'}
 							onSave={saveRecipe}
 							onBook={() => go('book')}
 							onAnother={() => {
@@ -2159,43 +2251,148 @@ const VerdictView: React.FC<{
  * is also the only honest moment to ask someone to keep the recipe: they know
  * now whether it was any good.
  */
+/**
+ * How it turned out, in the only three answers anyone actually gives.
+ *
+ * Asked here because here is the only place the answer exists. Before the
+ * cooking it would be a guess; on the recipe screen it would be a rating of a
+ * document. Standing over the finished pan, it is a fact.
+ *
+ * It is also the one honest reason to press save: "keep it" means something
+ * different when you already know it worked.
+ */
+const VERDICTS: Array<{ id: string; label: string; line: string }> = [
+	{
+		id: 'nailed',
+		label: 'Nailed it',
+		line: 'Then it is worth keeping — that is the whole point of a cookbook.',
+	},
+	{
+		id: 'close',
+		label: 'Close enough',
+		line: 'Close enough is how every dish starts. The second time is always better, and you will have the amounts.',
+	},
+	{
+		id: 'off',
+		label: 'Not quite',
+		line: 'Worth keeping anyway. Knowing which step went sideways is most of what you need for the next attempt.',
+	},
+];
+
 const DoneView: React.FC<{
 	title?: string;
 	first: boolean;
 	isSaved: boolean;
 	canSave: boolean;
+	/** True when this dish was built from what was in the kitchen, not a reel. */
+	improvised: boolean;
 	onSave: () => void;
 	onBook: () => void;
 	onAnother: () => void;
-}> = ({ title, first, isSaved, canSave, onSave, onBook, onAnother }) => (
-	<div className="rx-done">
-		<div className="rx-mark">✓</div>
-		<h2>
-			{first ? 'Congratulations on your first dish' : 'Another one down'}
-		</h2>
-		<p>
-			{title ? `You cooked ${title}.` : 'You cooked it.'}{' '}
-			{first
-				? 'That is the hard one over with — the next is easier, and the one after that is just dinner.'
-				: 'Keep it in your book and it is one tap away next time.'}
-		</p>
-		<div style={{ ...s.row, justifyContent: 'center' }}>
-			{!isSaved && (
-				<Button disabled={!canSave} onClick={onSave}>
-					Save it to my cookbook
-				</Button>
+}> = ({ title, first, isSaved, canSave, improvised, onSave, onBook, onAnother }) => {
+	const [rated, setRated] = useState<string | null>(null);
+	const chosen = VERDICTS.find((v) => v.id === rated);
+
+	return (
+		<div className="rx-finish rx-in">
+			<svg
+				className="rx-scene"
+				style={{ maxWidth: 230 }}
+				viewBox="0 0 300 190"
+				role="img"
+				aria-label="A finished dish"
+			>
+				{/* The same burst as the celebration screen, because this is the
+				    same feeling arriving for the second and better reason. */}
+				<g>
+					{[
+						[-70, -44, 60, 3.5],
+						[-40, -70, 0, 2.5],
+						[-8, -82, 120, 4],
+						[28, -74, 40, 3],
+						[60, -54, 150, 3.5],
+						[84, -24, 90, 2.5],
+						[-86, -8, 180, 3],
+					].map(([x, y, d, r], i) => (
+						<circle
+							key={i}
+							className="rx-spark"
+							cx="150"
+							cy="112"
+							r={r}
+							fill={i % 3 === 0 ? 'var(--rx-gold)' : 'var(--rx-gold-soft)'}
+							style={{ '--bx': `${x}px`, '--by': `${y}px`, animationDelay: `${d}ms` } as React.CSSProperties}
+						/>
+					))}
+				</g>
+
+				<g fill="none" stroke="var(--rx-ink-soft)" strokeWidth="2.2" strokeLinecap="round" opacity="0.45">
+					<path className="rx-steam" d="M130 96c-7-9 7-13 0-23" />
+					<path className="rx-steam rx-steam-2" d="M152 90c-8-11 8-15 0-26" />
+					<path className="rx-steam rx-steam-3" d="M174 96c-7-9 7-13 0-23" />
+				</g>
+
+				<path d="M110 124c8-17 25-26 42-26s34 9 42 26z" fill="var(--rx-gold-wash)" />
+				<circle cx="136" cy="115" r="4.5" fill="var(--rx-gold-soft)" />
+				<circle cx="153" cy="108" r="5" fill="var(--rx-gold)" />
+				<circle cx="170" cy="116" r="4" fill="var(--rx-gold-soft)" />
+				<g fill="none" stroke="var(--rx-ink)" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
+					<path d="M104 124h92c-3 25-21 39-46 39s-43-14-46-39z" />
+					<path d="M96 124h108" />
+					<path d="M84 172h132" stroke="var(--rx-ink-soft)" strokeWidth="2" opacity="0.3" />
+				</g>
+			</svg>
+
+			<h2>{first ? 'Congratulations on your first dish' : 'Congratulations, chef'}</h2>
+			<p>
+				{title ? `You cooked ${title}` : 'You cooked it'}
+				{improvised ? ', out of what was already in your kitchen. ' : '. '}
+				{first
+					? 'That is the hard one over with — the next is easier, and the one after that is just dinner.'
+					: 'Every one of these gets faster.'}
+			</p>
+
+			{/* The question, and then what the answer means. Nothing is gated on
+			    it: the actions below are there whether or not it is answered. */}
+			<p className="rx-ask">How did it turn out?</p>
+			<div className="rx-rate">
+				{VERDICTS.map((v) => (
+					<button
+						key={v.id}
+						type="button"
+						className={rated === v.id ? 'is-on' : undefined}
+						aria-pressed={rated === v.id}
+						onClick={() => setRated((prev) => (prev === v.id ? null : v.id))}
+					>
+						{v.label}
+					</button>
+				))}
+			</div>
+
+			{chosen && (
+				<p className="rx-said" key={chosen.id}>
+					{chosen.line}
+				</p>
 			)}
-			{isSaved && (
-				<Button variant="secondary" onClick={onBook}>
-					Open my cookbook
+
+			<div style={{ ...s.row, justifyContent: 'center' }}>
+				{!isSaved && (
+					<Button disabled={!canSave} onClick={onSave}>
+						Keep it in my cookbook
+					</Button>
+				)}
+				{isSaved && (
+					<Button variant="secondary" onClick={onBook}>
+						Open my cookbook
+					</Button>
+				)}
+				<Button variant="secondary" onClick={onAnother}>
+					Cook something else
 				</Button>
-			)}
-			<Button variant="secondary" onClick={onAnother}>
-				Cook something else
-			</Button>
+			</div>
 		</div>
-	</div>
-);
+	);
+};
 
 // =============================================================================
 // INGREDIENTS — shared by the tick step and the finished recipe, so the two
@@ -2875,6 +3072,21 @@ const CookView: React.FC<{
 	const pct = total && left !== null ? ((total - left) / total) * 100 : 0;
 
 	return (
+		<div className="rx-steamy">
+			{/* Behind everything, and behind the card the step sits on. Cook mode
+			    is the one screen someone stands in front of for half an hour with
+			    a pan going; it is the one screen that gets an atmosphere. */}
+			<div className="rx-clouds" aria-hidden="true">
+				<span className="rx-cloud" />
+				<span className="rx-cloud" />
+				<span className="rx-cloud" />
+			</div>
+			{/* And two more over the top, so the steam crosses the step rather
+			    than politely stopping at the edge of the card. */}
+			<div className="rx-drifting" aria-hidden="true">
+				<span className="rx-cloud" />
+				<span className="rx-cloud" />
+			</div>
 		<Card
 			header={`Step ${step.n ?? index + 1} of ${steps.length}`}
 			headerActions={
@@ -2990,6 +3202,7 @@ const CookView: React.FC<{
 				<div className="rx-hint">Arrow keys move between steps.</div>
 			</div>
 		</Card>
+		</div>
 	);
 };
 
