@@ -24,3 +24,7 @@ Thumbs.db
 # Wrangler local secrets for `wrangler dev` — same class as .env, never commit.
 .dev.vars
 **/.dev.vars
+.gstack/
+
+# Compiled prompts from scripts/yt-flow.cjs. Regenerated every run.
+.tmp/
