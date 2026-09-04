@@ -28,6 +28,7 @@ import {
 
 import { MAX_VIDEO_BYTES, THIN_EVIDENCE_CHARS, usePipelines } from './usePipelines';
 import { CookingScreen } from './CookingScreen';
+import { WelcomeScreen } from './WelcomeScreen';
 import { CelebrateScreen } from './CelebrateScreen';
 import { ForkScreen } from './ForkScreen';
 import { GroceryScreen } from './GroceryScreen';
@@ -507,6 +508,71 @@ const CSS = `
 .rx-dot.is-on { background: var(--rx-gold); transform: scale(1.4); }
 .rx-dot.is-past { background: var(--rx-ink-soft); opacity: 0.45; }
 .rx-hint { font-size: 11.5px; color: var(--rx-ink-soft); opacity: 0.75; margin-top: 14px; }
+
+/* ===========================================================================
+   THE FRONT DOOR
+
+   The one screen a stranger sees before deciding whether to bother. The cloche
+   is the pitch in one object: it sits closed, invites a touch, and what is
+   under it is a dish you already know the taste of.
+
+   It opens on hover for the curious and on click for everyone else. A
+   hover-only reveal is a reveal that does not exist on a phone, which is where
+   most of the people this is for will open it.
+   =========================================================================== */
+.rx-welcome { text-align: center; max-width: 600px; margin: 0 auto; padding: 10px 0 8px; }
+.rx-welcome-kicker {
+  font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--rx-gold); margin: 0 0 10px;
+}
+.rx-welcome h1 {
+  font-size: 34px; line-height: 1.14; margin: 0 0 6px;
+  letter-spacing: -0.6px;
+}
+@media (max-width: 520px) { .rx-welcome h1 { font-size: 27px; } }
+.rx-welcome-line {
+  font-size: 14.5px; line-height: 1.65; color: var(--rx-ink-soft);
+  margin: 0 auto 24px; max-width: 470px; min-height: 72px;
+}
+.rx-welcome-cta { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+/* The whole illustration is one button. */
+.rx-reveal {
+  display: block; width: 100%; max-width: 330px; margin: 0 auto 6px;
+  background: none; border: 0; padding: 0; cursor: pointer; font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.rx-reveal svg { display: block; width: 100%; overflow: visible; }
+.rx-reveal:focus-visible { outline: 2px solid var(--rx-gold); outline-offset: 6px; border-radius: 4px; }
+
+.rx-reveal-hint {
+  display: inline-block; margin-top: 2px;
+  font-size: 11px; letter-spacing: 1.8px; text-transform: uppercase;
+  color: var(--rx-ink-soft); opacity: 0.7;
+  transition: opacity 160ms ease, color 160ms ease;
+}
+.rx-reveal:hover .rx-reveal-hint { opacity: 1; color: var(--rx-gold); }
+
+/* Hover peeks. Click commits. */
+.rx-cloche { transition: transform 560ms cubic-bezier(0.2, 0.8, 0.25, 1); transform-box: fill-box; transform-origin: center bottom; }
+.rx-reveal:hover .rx-cloche { transform: translateY(-9px); }
+.rx-reveal.is-open .rx-cloche { transform: translateY(-58px) rotate(-11deg); }
+
+.rx-dish { opacity: 0; transition: opacity 260ms ease 200ms; }
+.rx-reveal.is-open .rx-dish { opacity: 1; }
+/* The steam and the sparks only exist once it is open — an animation running
+   under a closed lid is work nobody can see. */
+.rx-dish .rx-steam { animation-play-state: paused; }
+.rx-reveal.is-open .rx-dish .rx-steam { animation-play-state: running; }
+.rx-cloche-sparks { opacity: 0; }
+.rx-reveal.is-open .rx-cloche-sparks { opacity: 1; }
+.rx-reveal.is-open .rx-cloche-sparks .rx-spark { animation-name: rx-burst; }
+.rx-cloche-sparks .rx-spark { animation-name: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rx-cloche { transition-duration: 1ms; }
+  .rx-reveal:hover .rx-cloche { transform: none; }
+}
 
 /* ===========================================================================
    COOK MODE: THE STEAMY KITCHEN
@@ -1921,7 +1987,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 					<StepPips view={view} />
 
 					{view === 'welcome' && (
-						<WelcomeView
+						<WelcomeScreen
 							savedCount={saved.length}
 							onStart={() => setView('source')}
 							onBook={() => setView('book')}
@@ -2287,29 +2353,6 @@ const StepPips: React.FC<{ view: View }> = ({ view }) => {
 		</div>
 	);
 };
-
-const WelcomeView: React.FC<{ onStart: () => void; savedCount: number; onBook: () => void }> = ({
-	onStart,
-	savedCount,
-	onBook,
-}) => (
-	<div className="rx-hero rx-in">
-		<h1>Welcome to the journey of being a master chef</h1>
-		<p>
-			Send me a cooking reel, or just tell me what you want to eat. I will turn it into a
-			recipe you can actually follow — real amounts, the right order, and what it should look
-			like when it is ready.
-		</p>
-		<div style={{ ...s.row, justifyContent: 'center' }}>
-			<Button onClick={onStart}>Let us cook</Button>
-			{savedCount > 0 && (
-				<Button variant="secondary" onClick={onBook}>
-					Open my book ({savedCount})
-				</Button>
-			)}
-		</div>
-	</div>
-);
 
 const SourceView: React.FC<{ onPick: (mode: SourceMode) => void }> = ({ onPick }) => (
 	<div className="rx-in">
