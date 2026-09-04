@@ -1319,6 +1319,14 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 	 * something already in hand.
 	 */
 	const [pending, setPending] = useState<{ source: MediaSource; link: string } | null>(null);
+	/**
+	 * A dish named by a source that then failed to explain itself.
+	 *
+	 * Held so the dead end has a way out: writing a recipe from a dish name is
+	 * one cheap call, and it is the difference between "that did not work" and
+	 * dinner.
+	 */
+	const [recoverTitle, setRecoverTitle] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	/** A caveat about a result we did produce — distinct from a failure. */
 	const [notice, setNotice] = useState<string | null>(null);
@@ -1499,6 +1507,8 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			source?: MediaSource;
 			/** Set once the caption-or-video question has been answered. */
 			depth?: 'caption' | 'video';
+			/** Written from a dish name rather than read from a source. */
+			described?: boolean;
 		}) => {
 			if (inFlight.current) return;
 			inFlight.current = true;
@@ -1506,6 +1516,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			setError(null);
 			setNotice(null);
 			setSub(null);
+			setRecoverTitle(null);
 			// Set AFTER the reset above, which would otherwise wipe it.
 			if (payload.depth === 'caption') {
 				setNotice(
@@ -1724,7 +1735,8 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 				);
 				// Describing a dish and reading a reel are different jobs, and the
 				// prompt has to know which one it is being asked to do.
-				const describedByUser = !payload.link && !payload.file && sourceMode === 'describe';
+				const describedByUser =
+					payload.described || (!payload.link && !payload.file && sourceMode === 'describe');
 				const parsed = await extractRecipe(
 					transcript,
 					screenText,
@@ -1732,20 +1744,38 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 					describedByUser ? 'described' : 'reel',
 				);
 
-				// A recipe with neither ingredients nor steps is not a recipe, and
-				// the recipe view is the wrong place to say so: it offers "Start
-				// cooking" on nothing to cook, "Save to my book" on an empty shell,
-				// and a fridge box that would spend another model call comparing
-				// your kitchen against no ingredients. The model is instructed not
-				// to produce this, but model output is data rather than a contract,
-				// so the UI must not depend on it having complied.
-				const hasBody = Boolean(parsed.ingredients?.length) || Boolean(parsed.steps?.length);
-				if (!hasBody) {
+				// THE METHOD IS WHAT MAKES IT A RECIPE.
+				//
+				// This used to accept anything with an ingredient OR a step, and a
+				// silent village reel got through it: one ingredient ("Onion"), no
+				// method, and a page of notes about everything that could not be
+				// read. That is not a recipe with gaps, it is a gap with a title —
+				// and it was offering "Start cooking" on nothing to cook and "Save
+				// to my book" on an empty shell.
+				//
+				// A method with no ingredients is recoverable; a reader can work out
+				// what to buy from steps that name things. Ingredients with no
+				// method is not: the whole premise of this app is that the reader
+				// has never made this before and the reel skipped the technique.
+				// Handing them a shopping list and no instructions is the exact
+				// failure it exists to fix.
+				const steps = parsed.steps?.length ?? 0;
+				if (steps === 0) {
+					// The reel gave no method, but it did give away WHAT IT WAS. The
+					// model named the dish from a title card and a shot of an onion,
+					// and writing a recipe from a dish name is a job this app already
+					// does well, for one cheap call. So a dead end keeps the one
+					// thing it learned and offers to spend it.
+					setRecoverTitle(parsed.title?.trim() || null);
 					const why = parsed.missingInfo?.length
-						? ` Here is what was missing: ${parsed.missingInfo.slice(0, 3).join(' ')}`
+						? ` What was missing: ${parsed.missingInfo.slice(0, 2).join(' ')}`
 						: '';
+					const source = payload.link ? 'reel' : payload.file ? 'video' : 'text';
 					throw new Error(
-						`There was not enough in that ${payload.link ? 'link' : payload.file ? 'video' : 'text'} to build a recipe from.${why} Paste the recipe text below, or drop the video in.`,
+						`That ${source} showed the cooking but never explained it — no spoken steps, and ` +
+							`nothing readable on screen — so there is no method to give you, and a recipe ` +
+							`without one is no use.${why} If the post has the recipe written underneath, ` +
+							`paste that in below; it works better than the video on reels like this one.`,
 					);
 				}
 
@@ -2076,6 +2106,28 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 								setView('ingest');
 							}}
 						/>
+					)}
+
+					{/* A source that named the dish and then failed to explain it. The
+					    name is worth something on its own, and spending it is one
+					    cheap call — the difference between "that did not work" and
+					    dinner. Sits above the form, because it is the better offer. */}
+					{view === 'ingest' && recoverTitle && !busy && (
+						<Card header={`Shall I write “${recoverTitle}” from scratch?`}>
+							<p style={{ ...s.muted, marginTop: 0 }}>
+								The video named the dish even though it never explained it. I can write the
+								recipe the way someone who has made it a hundred times would — real amounts,
+								the right order, and what to look for at each step. It takes seconds, and it
+								is honest about being written rather than read.
+							</p>
+							<Button
+								onClick={() =>
+									void runExtract({ text: recoverTitle, described: true })
+								}
+							>
+								Write it for me
+							</Button>
+						</Card>
 					)}
 
 					{view === 'ingest' && (
