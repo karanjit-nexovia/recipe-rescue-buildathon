@@ -29,6 +29,7 @@ import {
 import { MAX_VIDEO_BYTES, THIN_EVIDENCE_CHARS, usePipelines } from './usePipelines';
 import { CookingScreen } from './CookingScreen';
 import { WelcomeScreen } from './WelcomeScreen';
+import { CAPTION_ENOUGH, DepthScreen } from './DepthScreen';
 import { CelebrateScreen } from './CelebrateScreen';
 import { ForkScreen } from './ForkScreen';
 import { GroceryScreen } from './GroceryScreen';
@@ -42,7 +43,7 @@ import {
 	ResolveError,
 	verifiedProviders,
 } from './mediaSource';
-import type { MediaSource } from './mediaSource';
+import type { MediaSource, ResolveOutcome } from './mediaSource';
 import type { Ingredient, Recipe, SavedRecipe, Step, SubLine, Substitution } from './types';
 
 // =============================================================================
@@ -148,6 +149,8 @@ type View =
 	/** The wait between handing over a link and having a recipe. Its own screen
 	 *  because it lasts minutes, not because there is anything to do on it. */
 	| 'cooking'
+	/** A caption long enough to be the recipe: read it, or watch the video. */
+	| 'depth'
 	/** The wait while swaps for THIS dish are worked out. */
 	| 'adjusting'
 	/** The wait while a different dish is written from what is in the kitchen. */
@@ -742,6 +745,29 @@ const CSS = `
 }
 .rx-way p { font-size: 12.5px; color: var(--rx-ink-soft); margin: 0; line-height: 1.5; }
 
+/* The first lines of the real caption, so the choice is made on evidence
+   rather than on a promise. Set as a quotation because that is what it is. */
+.rx-caption-peek {
+  margin: 0 auto 22px; max-width: 520px; text-align: left;
+  border-left: 2px solid var(--rx-gold); padding: 2px 0 2px 16px;
+}
+.rx-caption-peek figcaption {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 1.8px; text-transform: uppercase;
+  color: var(--rx-ink-soft); margin-bottom: 6px;
+}
+.rx-caption-peek blockquote {
+  margin: 0; font-family: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
+  font-size: 14px; line-height: 1.6; color: var(--rx-ink); overflow-wrap: anywhere;
+}
+
+/* A way out that does not compete with the two real choices. */
+.rx-plain {
+  margin-top: 20px; background: none; border: 0; padding: 6px;
+  font: inherit; font-size: 12.5px; color: var(--rx-ink-soft);
+  text-decoration: underline; text-underline-offset: 3px; cursor: pointer;
+}
+.rx-plain:hover { color: var(--rx-gold); }
+
 /* --- the grocery run ----------------------------------------------------
    Set as a paper slip torn off a pad, not a panel: square corners, a ruled
    row per line, a tally at the foot, and a torn bottom edge. It is a thing
@@ -1285,6 +1311,14 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 	 * is not a shopping list.
 	 */
 	const [shopList, setShopList] = useState<ShoppingItem[]>([]);
+	/**
+	 * A resolved post waiting on the caption-or-video question.
+	 *
+	 * Held so that answering it does not have to resolve the link a second
+	 * time — that is another actor run and another eight seconds to learn
+	 * something already in hand.
+	 */
+	const [pending, setPending] = useState<{ source: MediaSource; link: string } | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	/** A caveat about a result we did produce — distinct from a failure. */
 	const [notice, setNotice] = useState<string | null>(null);
@@ -1456,13 +1490,29 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 	}, []);
 
 	const runExtract = useCallback(
-		async (payload: { file?: File; text?: string; link?: string; seconds?: number | null }) => {
+		async (payload: {
+			file?: File;
+			text?: string;
+			link?: string;
+			seconds?: number | null;
+			/** An already-resolved post, so choosing the video does not re-resolve it. */
+			source?: MediaSource;
+			/** Set once the caption-or-video question has been answered. */
+			depth?: 'caption' | 'video';
+		}) => {
 			if (inFlight.current) return;
 			inFlight.current = true;
 			abortRef.current = new AbortController();
 			setError(null);
 			setNotice(null);
 			setSub(null);
+			// Set AFTER the reset above, which would otherwise wipe it.
+			if (payload.depth === 'caption') {
+				setNotice(
+					'Built from the post caption. Anything the cook only said out loud, or only showed ' +
+						'on screen, is not in here — run the video instead if a step looks thin.',
+				);
+			}
 			// A dropped file already knows its own length; a link learns it from
 			// the resolver a few seconds from now.
 			setReelSeconds(payload.seconds ?? null);
@@ -1553,6 +1603,31 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 						}
 					} else {
 						const length = outcome.source.durationSeconds ?? null;
+						const cap = (outcome.source.caption ?? '').trim();
+
+						// A recipe reel very often writes the whole recipe into its
+						// caption, and the resolver has already handed that over for
+						// free by the time we are standing here. Reading it is one
+						// model call and a few seconds; reading the VIDEO means
+						// downloading it, listening to it and usually reading its
+						// frames too — minutes of wall clock, and by a wide margin
+						// the most expensive thing this app does.
+						//
+						// So when the caption is long enough to plausibly BE the
+						// recipe, the choice goes to the person waiting rather than
+						// to a default they never saw. Below that length the video is
+						// the only real option, and offering a choice there would be
+						// offering a false one.
+						if (!payload.depth && cap.length >= CAPTION_ENOUGH) {
+							// A decision takes as long as it takes, and a warmed task
+							// bills while it waits. Hand it back — if they choose the
+							// video it costs one cold start against a two-minute path,
+							// which is nothing.
+							release('transcribe');
+							setPending({ source: outcome.source, link: payload.link });
+							setView('depth');
+							return;
+						}
 
 						// Refused HERE, in the gap between knowing the length and
 						// spending anything on it. The resolve that produced this
@@ -2085,6 +2160,32 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 							}}
 							onAdjust={() => void runSubstitute()}
 							onImprovise={() => void runCookAlternative()}
+						/>
+					)}
+
+					{view === 'depth' && pending && (
+						<DepthScreen
+							caption={pending.source.caption ?? ''}
+							seconds={pending.source.durationSeconds}
+							// The caption goes in as the transcript, exactly as a
+							// pasted one would: one model call, no download, no video
+							// pipeline. origin stays 'reel', because that is where
+							// these words came from.
+							onCaption={() => {
+								const cap = (pending.source.caption ?? '').trim();
+								setPending(null);
+								void runExtract({ text: cap, depth: 'caption' });
+							}}
+							onVideo={() => {
+								const src = pending.source;
+								const link = pending.link;
+								setPending(null);
+								void runExtract({ link, source: src, depth: 'video' });
+							}}
+							onBack={() => {
+								setPending(null);
+								setView('ingest');
+							}}
 						/>
 					)}
 
