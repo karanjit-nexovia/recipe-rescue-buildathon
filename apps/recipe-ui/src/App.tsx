@@ -28,6 +28,7 @@ import {
 
 import { MAX_VIDEO_BYTES, THIN_EVIDENCE_CHARS, usePipelines } from './usePipelines';
 import {
+	detectPlatform,
 	fetchMediaAsFile,
 	looksLikeLink,
 	resolveMediaSource,
@@ -632,8 +633,16 @@ const SUB_VARIANT: Record<string, 'success' | 'warning' | 'error'> = {
 // =============================================================================
 
 const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
-	const { transcribe, readScreenText, describeFrames, extractRecipe, checkFridge, cookAlternative } =
-		usePipelines();
+	const {
+		prewarm,
+		release,
+		transcribe,
+		readScreenText,
+		describeFrames,
+		extractRecipe,
+		checkFridge,
+		cookAlternative,
+	} = usePipelines();
 	const { appState, updateAppState, loaded } = useWorkspace() as {
 		appState: { saved?: SavedRecipe[] } | undefined;
 		updateAppState: (fn: (prev: Record<string, unknown>) => Record<string, unknown>) => void;
@@ -829,6 +838,22 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 				let file = payload.file;
 				let caption: string | undefined;
 
+				// Starting a pipeline task costs 8-11 seconds of orchestration
+				// before any work begins, and this run used to pay them one after
+				// another with the network idle. Start the ones this run is
+				// certain to need now, so they warm up alongside the resolve and
+				// the download instead of after them.
+				//
+				// `detectPlatform` is a synchronous URL check, so this costs
+				// nothing to decide: an Instagram link is the video path and will
+				// reach the transcribe task; TikTok and YouTube only ever come
+				// back as text and must NOT warm it. Nothing here warms
+				// screentext or vision — those are the escalated rungs, and a
+				// task bills while alive whether or not it is ever climbed.
+				const platform = payload.link ? detectPlatform(payload.link) : undefined;
+				if (platform === 'instagram') prewarm('transcribe');
+				else if (!payload.file) prewarm('ask');
+
 				if (payload.link) {
 					setBusy('Checking the link');
 					const outcome = await resolveMediaSource(payload.link);
@@ -838,6 +863,15 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 					}
 
 					if (outcome.kind === 'text') {
+						// The video path was predicted from the host and did not
+						// happen: this reel came back as a caption. Hand the warmed
+						// task back rather than paying out its idle ttl, and warm
+						// the rung this run will actually reach instead.
+						if (platform === 'instagram') {
+							release('transcribe');
+							prewarm('ask');
+						}
+
 						// A caption or title — usable, but nothing was watched or
 						// heard. Say so rather than letting it pass as a full read.
 						transcript = outcome.text;
@@ -850,6 +884,10 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 						// came from nowhere. Stop at the ingest screen instead, where
 						// the two things that DO work are one action away.
 						if (transcript.trim().length < THIN_EVIDENCE_CHARS) {
+							// The warmed ask task is deliberately NOT released here.
+							// This message sends the reader to the paste box, and
+							// what they paste needs that same task within seconds —
+							// giving it back now just buys another cold start.
 							throw new ResolveError(
 								'no-media',
 								outcome.source.platform === 'youtube'
@@ -902,6 +940,12 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 				}
 
 				if (file) {
+					// Every path through this block ends in an extraction, so the
+					// ask task is certain to be needed. Started here, its 8-second
+					// cold start happens while the audio is being read rather than
+					// after it — the one stage long enough to hide it completely.
+					prewarm('ask');
+
 					setBusy('Listening to the reel');
 					const heard = await transcribe(file);
 					transcript = heard.transcript;
@@ -981,7 +1025,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 				setBusy(null);
 			}
 		},
-		[describeFrames, extractRecipe, readScreenText, sourceMode, transcribe],
+		[describeFrames, extractRecipe, prewarm, readScreenText, release, sourceMode, transcribe],
 	);
 
 	/** DropZone never filters by type — the host validates. Do it before the

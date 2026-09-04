@@ -180,6 +180,48 @@ export function usePipelines() {
 	);
 
 	/**
+	 * Start a pipeline's task before the work that needs it, so its cold start
+	 * overlaps something that was going to happen anyway.
+	 *
+	 * Measured on this platform: a cold `use()` is 8-11 seconds, while
+	 * attaching to a task already alive is under 100ms. The run used to pay
+	 * those starts one after another with nothing else in flight — about 28
+	 * seconds of a 165-second link-to-recipe spent waiting on orchestration
+	 * rather than on any actual work.
+	 *
+	 * Only ever call this for a rung the run is CERTAIN to reach. A task bills
+	 * for as long as it is alive, so warming a rung that might never be climbed
+	 * trades credits for latency — the wrong way round on this budget, and the
+	 * precise cost the escalation ladder above exists to avoid.
+	 */
+	const prewarm = useCallback(
+		(name: PipeName): void => {
+			// A head start, not a step: swallow the failure. tokenFor clears its
+			// own cache when a start rejects, so the real call retries and
+			// reports the error in the place the user can act on it.
+			void tokenFor(name).catch(() => undefined);
+		},
+		[tokenFor],
+	);
+
+	/**
+	 * Hand back a task warmed for work that turned out not to happen — an
+	 * Instagram link that resolved to a caption instead of a video, say.
+	 *
+	 * The ttl would reap it in three minutes regardless; this is about not
+	 * paying for those three minutes every time a prediction misses.
+	 */
+	const release = useCallback(
+		(name: PipeName): void => {
+			const pending = tokens.current[name];
+			if (!pending) return;
+			delete tokens.current[name];
+			void pending.then((token) => client?.terminate(token)).catch(() => undefined);
+		},
+		[client],
+	);
+
+	/**
 	 * Run something against a live task, starting a new one if the cached token
 	 * points at a corpse.
 	 *
@@ -336,6 +378,8 @@ export function usePipelines() {
 	return {
 		client,
 		isConnected,
+		prewarm,
+		release,
 		transcribe,
 		readScreenText,
 		describeFrames,
