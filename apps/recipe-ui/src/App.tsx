@@ -44,6 +44,69 @@ import type { Ingredient, Recipe, SavedRecipe, Step, SubLine, Substitution } fro
 
 const VIDEO_RE = /\.(mp4|mov|m4v|webm|avi|mkv)$/i;
 
+/**
+ * COMPETITION GUARD — remove after the buildathon closes (2026-09-06).
+ *
+ * Every stage that reads a video scales with its length, so reel length is the
+ * single biggest lever on what a run costs: a 62-second reel measured past four
+ * minutes and burned 557 platform tokens against a budget with four runs left
+ * in it. Nothing about the app needs this limit; the remaining credit balance
+ * does.
+ *
+ * Enforced on duration rather than on file size because size tracks encoding
+ * quality as much as length, and it is time on the clock that costs money here.
+ *
+ * There is deliberately NO hard floor. Thirty seconds is the advice, because
+ * shorter reels tend to skip the steps that make a recipe worth having — but a
+ * short reel is CHEAPER, so refusing one would spend goodwill to save nothing.
+ * A user turned away is the one thing this project cannot afford.
+ */
+const MAX_REEL_SECONDS = 45;
+const SUGGESTED_REEL_RANGE = '30 to 45 seconds';
+
+/** Shared by both paths, so a link and a dropped file are refused in the same
+ *  words for the same reason. */
+const tooLongMessage = (seconds: number): string =>
+	`That reel is ${Math.round(seconds)} seconds long, and during the competition this is capped at ` +
+	`${MAX_REEL_SECONDS}. Reading a video costs real credits per second of footage, and the budget ` +
+	`has to last the week. Pick a reel of ${SUGGESTED_REEL_RANGE} — or paste its caption below, ` +
+	`which costs almost nothing and is often the whole recipe.`;
+
+/**
+ * A dropped file's duration, read from its own metadata.
+ *
+ * The resolver hands us the length of a linked reel, but a file dropped from
+ * disk has nobody to ask. The browser will decode just the metadata off an
+ * object URL — no upload, no network, nothing billed — which is what makes it
+ * possible to refuse an over-long video before it costs anything.
+ *
+ * Resolves null when the browser cannot read it. An unreadable duration must
+ * not block the upload: failing open costs at most one run, while failing
+ * closed would reject files that are perfectly fine.
+ */
+const readVideoSeconds = (file: File): Promise<number | null> =>
+	new Promise((resolve) => {
+		const url = URL.createObjectURL(file);
+		const probe = document.createElement('video');
+		const done = (value: number | null) => {
+			URL.revokeObjectURL(url);
+			probe.removeAttribute('src');
+			resolve(value);
+		};
+		// Some containers never fire either event. Do not hang the drop on it.
+		const timer = setTimeout(() => done(null), 4000);
+		probe.preload = 'metadata';
+		probe.onloadedmetadata = () => {
+			clearTimeout(timer);
+			done(Number.isFinite(probe.duration) && probe.duration > 0 ? probe.duration : null);
+		};
+		probe.onerror = () => {
+			clearTimeout(timer);
+			done(null);
+		};
+		probe.src = url;
+	});
+
 /** Above this share of estimated ingredients, badging each one is just noise —
  *  say it once at the top instead. */
 const MOSTLY_ESTIMATED = 0.6;
@@ -932,14 +995,16 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 	}, []);
 
 	const runExtract = useCallback(
-		async (payload: { file?: File; text?: string; link?: string }) => {
+		async (payload: { file?: File; text?: string; link?: string; seconds?: number | null }) => {
 			if (inFlight.current) return;
 			inFlight.current = true;
 			abortRef.current = new AbortController();
 			setError(null);
 			setNotice(null);
 			setSub(null);
-			setReelSeconds(null);
+			// A dropped file already knows its own length; a link learns it from
+			// the resolver a few seconds from now.
+			setReelSeconds(payload.seconds ?? null);
 			// Hand the screen over for the duration. Every caller of this is on
 			// the ingest form, and leaving them there greys out the only control
 			// on the page for two minutes; the wait deserves a screen of its own.
@@ -1025,9 +1090,20 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 							setNotice(outcome.source.warnings.join(' '));
 						}
 					} else {
+						const length = outcome.source.durationSeconds ?? null;
+
+						// Refused HERE, in the gap between knowing the length and
+						// spending anything on it. The resolve that produced this
+						// number costs no platform credits; the download and every
+						// stage after it do.
+						if (length && length > MAX_REEL_SECONDS) {
+							release('transcribe');
+							throw new ResolveError('not-a-post', tooLongMessage(length));
+						}
+
 						setBusy('Retrieving the video');
 						// Say how long this will take before it takes it.
-						setReelSeconds(outcome.source.durationSeconds ?? null);
+						setReelSeconds(length);
 						caption = outcome.source.caption;
 						try {
 							file = await fetchWithOneRetry(outcome.source, payload.link);
@@ -1158,7 +1234,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 	/** DropZone never filters by type — the host validates. Do it before the
 	 *  upload so a mis-drop fails instantly instead of after a long transfer. */
 	const onFiles = useCallback(
-		(files: FileList) => {
+		async (files: FileList) => {
 			if (inFlight.current) {
 				setError('Still working on the last one — give it a moment.');
 				return;
@@ -1173,7 +1249,18 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 				setError(`That file is ${Math.round(file.size / 1e6)} MB — too big for a reel. Trim it first.`);
 				return;
 			}
-			void runExtract({ file });
+
+			// The same competition cap the link path applies, read off the file
+			// itself. Takes a moment and no network, and it happens before the
+			// upload rather than after — which is the entire point of it.
+			const length = await readVideoSeconds(file);
+			if (length && length > MAX_REEL_SECONDS) {
+				setError(tooLongMessage(length));
+				return;
+			}
+			// Handed to the run rather than set here: runExtract clears this on
+			// entry, so anything set before the call is wiped by it.
+			void runExtract({ file, seconds: length });
 		},
 		[runExtract],
 	);
@@ -1581,6 +1668,11 @@ const IngestView: React.FC<{
 					Verified for {verifiedProviders().join(', ')}. Anything else — paste the recipe
 					text below, or drop the video file in.
 				</p>
+				<p style={{ ...s.muted, marginTop: 0 }}>
+					Reels of <strong>{SUGGESTED_REEL_RANGE}</strong> work best, and during the
+					competition anything over {MAX_REEL_SECONDS} seconds is turned away — reading a
+					video costs credits for every second of it.
+				</p>
 				<div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
 					<input
 						style={{ ...s.textarea, minHeight: 0, flex: '1 1 22rem', padding: '10px 12px' }}
@@ -1599,7 +1691,7 @@ const IngestView: React.FC<{
 
 			<DropZone
 				title="Or drop the video here"
-				hint="One at a time — MP4, MOV or WEBM. Works even when the reel has no words at all."
+				hint={`One at a time — MP4, MOV or WEBM, up to ${MAX_REEL_SECONDS} seconds. Works even when the reel has no words at all.`}
 				onFiles={onFiles}
 			/>
 				</>
