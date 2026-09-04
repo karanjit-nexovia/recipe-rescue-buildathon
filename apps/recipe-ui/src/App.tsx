@@ -71,7 +71,19 @@ const SCALES: Array<[number, string]> = [
 	[3, '3x'],
 ];
 
-type View = 'welcome' | 'source' | 'ingest' | 'ingredients' | 'verdict' | 'recipe' | 'cook' | 'done' | 'book';
+type View =
+	| 'welcome'
+	| 'source'
+	| 'ingest'
+	/** The wait between handing over a link and having a recipe. Its own screen
+	 *  because it lasts minutes, not because there is anything to do on it. */
+	| 'cooking'
+	| 'ingredients'
+	| 'verdict'
+	| 'recipe'
+	| 'cook'
+	| 'done'
+	| 'book';
 
 /** Which way in the user chose on the second screen. */
 type SourceMode = 'link' | 'describe';
@@ -394,12 +406,71 @@ const CSS = `
 .rx-dot.is-past { background: var(--rx-ink-soft); opacity: 0.45; }
 .rx-hint { font-size: 11.5px; color: var(--rx-ink-soft); opacity: 0.75; margin-top: 14px; }
 
+/* ===========================================================================
+   THE COOKING SCREEN
+
+   A link takes upwards of two minutes to become a recipe, and for most of it
+   nothing observable happens. A banner over the ingest form spends that time
+   saying the form is unavailable; this spends it showing something being made.
+
+   The scene is drawn in the same ink-and-gold line art as the rest of the app
+   rather than as a cartoon — it is a quiet screen someone will look at for two
+   minutes, not a splash. The stage text and the second counter still carry the
+   honest account of what is happening; the pan is only what makes the wait
+   bearable while they read it.
+   =========================================================================== */
+.rx-cooking { text-align: center; padding: 30px 0 10px; }
+.rx-stove { display: block; width: 100%; max-width: 300px; margin: 0 auto 30px; overflow: visible; }
+
+/* One cycle is one toss: the pan tips away, everything in it leaves, and the
+   pan comes back under it in time to catch. The bits are on the same duration
+   so the catch lands where the throw started. */
+@keyframes rx-toss {
+  0%, 14%  { transform: rotate(0deg) translateY(0); }
+  30%      { transform: rotate(-15deg) translateY(-7px); }
+  48%      { transform: rotate(7deg) translateY(3px); }
+  66%      { transform: rotate(-2deg) translateY(0); }
+  100%     { transform: rotate(0deg) translateY(0); }
+}
+.rx-pan { transform-box: fill-box; transform-origin: 78% 55%; animation: rx-toss 1900ms ease-in-out infinite; }
+
+/* Each bit carries its own arc in --dx / --dy, so one keyframe throws six
+   ingredients along six different paths. */
+@keyframes rx-fly {
+  0%, 12%  { transform: translate(0, 0) rotate(0deg); }
+  44%      { transform: translate(var(--dx, 0), var(--dy, -34px)) rotate(150deg); }
+  72%      { transform: translate(calc(var(--dx, 0px) * 0.35), 4px) rotate(280deg); }
+  100%     { transform: translate(0, 0) rotate(360deg); }
+}
+.rx-bit { transform-box: fill-box; transform-origin: center; animation: rx-fly 1900ms ease-in-out infinite; }
+
+@keyframes rx-flicker {
+  0%, 100% { transform: scaleY(0.86); opacity: 0.45; }
+  50%      { transform: scaleY(1.18); opacity: 0.8; }
+}
+.rx-flame { transform-box: fill-box; transform-origin: center bottom; animation: rx-flicker 820ms ease-in-out infinite; }
+.rx-flame-2 { animation-duration: 1150ms; animation-delay: 180ms; }
+.rx-flame-3 { animation-duration: 950ms; animation-delay: 400ms; }
+
+.rx-cooking h2 { font-size: 25px; margin: 0 0 14px; }
+/* The stage line changes four or five times across a run. Fading each one in
+   makes the change register as progress rather than as a flicker. */
+.rx-stage { font-size: 15px; color: var(--rx-ink); margin: 0 0 10px; min-height: 21px; }
+.rx-clock {
+  font-size: 12.5px; color: var(--rx-ink-soft); font-variant-numeric: tabular-nums;
+  letter-spacing: 0.3px; margin: 0;
+}
+.rx-reassure { font-size: 12.5px; color: var(--rx-ink-soft); opacity: 0.85; margin: 12px auto 0; max-width: 380px; line-height: 1.5; }
+.rx-cooking .rx-warn { color: var(--rx-gold); opacity: 1; }
+
 /* Respect the system setting rather than animating over someone who asked us
-   not to — motion sickness and vestibular disorders are real. */
+   not to — motion sickness and vestibular disorders are real. A still pan with
+   the stage text and the counter loses nothing that matters. */
 @media (prefers-reduced-motion: reduce) {
   .rx-in { animation: none; }
   .rx-dot, .rx-box, .rx-bar-fill, .rx-ing, .rx-step, .rx-scale button { transition-duration: 1ms; }
   .is-done .rx-box { animation: none; }
+  .rx-pan, .rx-bit, .rx-flame { animation: none; }
 }
 `;
 
@@ -555,6 +626,19 @@ const waitText = (elapsed: number): string => {
 	if (elapsed <= 25) return '…';
 	if (elapsed <= SLOW_SECONDS) return '. Reading a reel properly takes a while; it has not stalled.';
 	return '. This is longer than a reel normally takes. It will stop on its own if nothing comes back — or start again with the caption box, which is quick.';
+};
+
+/**
+ * The same account as waitText, written as a standalone sentence for the
+ * cooking screen rather than as a clause tacked onto a banner.
+ *
+ * Null before 25 seconds: nothing has gone on long enough to need explaining,
+ * and reassurance offered that early only plants the doubt it answers.
+ */
+const waitNote = (elapsed: number): string | null => {
+	if (elapsed <= 25) return null;
+	if (elapsed <= SLOW_SECONDS) return 'Reading a reel properly takes a while. It has not stalled.';
+	return 'This is longer than a reel normally takes. It will stop on its own if nothing comes back — or start again with the caption box, which is quick.';
 };
 
 const summarise = (r: Recipe, extra?: string): string =>
@@ -831,6 +915,10 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			setError(null);
 			setNotice(null);
 			setSub(null);
+			// Hand the screen over for the duration. Every caller of this is on
+			// the ingest form, and leaving them there greys out the only control
+			// on the page for two minutes; the wait deserves a screen of its own.
+			setView('cooking');
 			try {
 				let transcript = payload.text ?? '';
 				let screenText: string | undefined;
@@ -1020,6 +1108,10 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 				setView('ingredients');
 			} catch (err) {
 				setError(errText(err));
+				// Back to the form, because every one of these errors ends in
+				// "paste the caption" or "drop the video in" — and the thing it
+				// names has to be on screen under the message that names it.
+				setView('ingest');
 			} finally {
 				inFlight.current = false;
 				setBusy(null);
@@ -1226,7 +1318,11 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 					{!isConnected && <Banner variant="warning">Connecting to RocketRide…</Banner>}
 					{error && <Banner variant="error">{error}</Banner>}
 					{notice && !busy && <Banner variant="warning">{notice}</Banner>}
-					{busy && (
+					{/* The cooking screen states its own stage and second count, so
+					    the banner would be saying it twice. Substitution and the
+					    alternative dish still run behind the verdict screen, and
+					    those keep the banner. */}
+					{busy && view !== 'cooking' && (
 						<Banner variant={elapsed > SLOW_SECONDS ? 'warning' : 'info'}>
 							{busy} — {elapsed}s{waitText(elapsed)}
 						</Banner>
@@ -1263,6 +1359,8 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 							onLink={(link) => void runExtract({ link })}
 						/>
 					)}
+
+					{view === 'cooking' && <CookingView stage={busy ?? 'Getting started'} elapsed={elapsed} />}
 
 					{view === 'ingredients' && recipe && (
 						<Card
@@ -1521,6 +1619,121 @@ const StepPips: React.FC<{ view: View }> = ({ view }) => {
 			{STEP_ORDER.map((_, i) => (
 				<span key={i} className={`rx-pip${i === at ? ' is-on' : i < at ? ' is-past' : ''}`} />
 			))}
+		</div>
+	);
+};
+
+/**
+ * What is in the pan.
+ *
+ * Each bit carries its own arc rather than sharing one: five things thrown
+ * along an identical path read as one object drawn five times. The delays are
+ * small and uneven for the same reason.
+ */
+const PAN_BITS: Array<{ dx: number; dy: number; delay: number; shape: React.ReactNode }> = [
+	{ dx: -40, dy: -58, delay: 0, shape: <circle cx="102" cy="131" r="5.5" fill="var(--rx-gold)" /> },
+	{
+		dx: -18,
+		dy: -72,
+		delay: 70,
+		shape: <rect x="114" y="125" width="10" height="10" rx="2" fill="var(--rx-gold-soft)" />,
+	},
+	{ dx: 2, dy: -78, delay: 130, shape: <circle cx="136" cy="130" r="4.5" fill="var(--rx-ink-soft)" opacity="0.5" /> },
+	{
+		dx: 24,
+		dy: -70,
+		delay: 55,
+		shape: <rect x="146" y="127" width="14" height="7" rx="3.5" fill="var(--rx-gold)" />,
+	},
+	{ dx: 44, dy: -54, delay: 20, shape: <circle cx="170" cy="132" r="6" fill="var(--rx-gold-soft)" /> },
+];
+
+/**
+ * The waiting screen.
+ *
+ * Two minutes is a long time to hold someone on a form that has gone
+ * unavailable, which is what a banner over the ingest page amounts to. This
+ * takes the whole screen and shows the thing being made instead.
+ *
+ * The animation is the smaller half of it. The stage line and the counter are
+ * what actually stop a long wait reading as a hang, so they stay exactly as
+ * honest here as they were in the banner — the pan is what makes it bearable
+ * to sit and read them.
+ */
+const CookingView: React.FC<{ stage: string; elapsed: number }> = ({ stage, elapsed }) => {
+	const note = waitNote(elapsed);
+	return (
+		<div className="rx-cooking rx-in">
+			<svg
+				className="rx-stove"
+				viewBox="0 0 300 210"
+				role="img"
+				aria-label="A pan on the heat, tossing its ingredients"
+			>
+				{/* The burner and its heat, under everything. The flame tips stop
+				    just short of the pan base so they read as licking it rather
+				    than burning through it. */}
+				<g>
+					<path
+						d="M98 203h68"
+						stroke="var(--rx-ink-soft)"
+						strokeWidth="3"
+						strokeLinecap="round"
+						opacity="0.26"
+						fill="none"
+					/>
+					<path className="rx-flame" d="M116 201c-6-14 6-18 1-30 11 8 9 22-1 30z" fill="var(--rx-gold-soft)" />
+					<path
+						className="rx-flame rx-flame-2"
+						d="M134 202c-7-17 7-22 1-36 13 10 11 26-1 36z"
+						fill="var(--rx-gold)"
+					/>
+					<path
+						className="rx-flame rx-flame-3"
+						d="M152 201c-6-14 6-18 1-30 11 8 9 22-1 30z"
+						fill="var(--rx-gold-soft)"
+					/>
+				</g>
+
+				{/* The pan: line art, in the same ink as the type. */}
+				<g
+					className="rx-pan"
+					fill="none"
+					stroke="var(--rx-ink)"
+					strokeWidth="2.4"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+				>
+					<ellipse cx="132" cy="126" rx="56" ry="12" />
+					<path d="M76 126c2 30 30 42 56 42s54-12 56-42" />
+					<path d="M188 122l68-19" strokeWidth="5" />
+					<path d="M252 105l14-4" strokeWidth="7" stroke="var(--rx-ink-soft)" opacity="0.55" />
+				</g>
+
+				{/* Painted after the pan so the toss passes in front of its rim. */}
+				<g>
+					{PAN_BITS.map((bit, i) => (
+						<g
+							key={i}
+							className="rx-bit"
+							style={
+								{
+									'--dx': `${bit.dx}px`,
+									'--dy': `${bit.dy}px`,
+									animationDelay: `${bit.delay}ms`,
+								} as React.CSSProperties
+							}
+						>
+							{bit.shape}
+						</g>
+					))}
+				</g>
+			</svg>
+
+			<h2>Cooking your recipe</h2>
+			<p className="rx-stage">{stage}</p>
+			<p className={`rx-clock${elapsed > SLOW_SECONDS ? ' rx-warn' : ''}`}>{mmss(elapsed)}</p>
+			{note && <p className="rx-reassure">{note}</p>}
 		</div>
 	);
 };
