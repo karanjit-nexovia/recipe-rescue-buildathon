@@ -147,7 +147,9 @@ type View =
 	/** The wait between handing over a link and having a recipe. Its own screen
 	 *  because it lasts minutes, not because there is anything to do on it. */
 	| 'cooking'
-	/** The wait while the model works out what these ingredients can become. */
+	/** The wait while swaps for THIS dish are worked out. */
+	| 'adjusting'
+	/** The wait while a different dish is written from what is in the kitchen. */
 	| 'improvising'
 	/** Everything ticked. No call to make, and the best news the app has. */
 	| 'celebrate'
@@ -296,9 +298,15 @@ const CSS = `
 }
 
 /* The whole point of the redesign: what I need, beside what I do. */
-.rx-split { display: grid; grid-template-columns: 1fr; gap: 30px; }
+/* Same trap as .rx-ways: this breakpoint is measured against the window, but
+   the app is a panel inside the shell and its column is narrower. The
+   minmax(0, ...) is what lets each side shrink — a grid track will not go
+   below its content's min-content width unless told it may, which is how a
+   long ingredient name pushes the method off the edge of the card. */
+.rx-split { display: grid; grid-template-columns: minmax(0, 1fr); gap: 30px; }
+.rx-split > * { min-width: 0; }
 @media (min-width: 880px) {
-  .rx-split { grid-template-columns: minmax(260px, 330px) 1fr; gap: 44px; align-items: start; }
+  .rx-split { grid-template-columns: minmax(0, 330px) minmax(0, 1fr); gap: 44px; align-items: start; }
   /* The verdict screen has no method beside it, so it takes the full width. */
   .rx-split.rx-solo { grid-template-columns: 1fr; max-width: 680px; margin: 0 auto; }
 }
@@ -321,6 +329,23 @@ const CSS = `
   font-size: 13px; text-align: right; color: var(--rx-ink-soft);
   font-variant-numeric: tabular-nums; max-width: 160px;
 }
+
+/* ---------------------------------------------------------------------------
+   OVERFLOW GUARDS
+
+   Every string on these screens is model output, and the model writes things
+   like "Neutral oil (vegetable/rapeseed) + ghee or butter" and "Kasuri methi
+   (dried fenugreek leaves)". A browser will not break inside a parenthesised
+   run or at a slash, so those sail straight out through the side of the card.
+   A grid column also refuses to shrink below its content unless told, which is
+   what minmax(0, ...) is for: 1fr alone means min-content, not zero.
+   --------------------------------------------------------------------------- */
+.rx-ing { grid-template-columns: minmax(0, 1fr) minmax(0, auto); }
+.rx-ing-name, .rx-ing-qty, .rx-ing-note,
+.rx-step-text, .rx-cook-step, .rx-cook-cue, .rx-cook-ing,
+.rx-verdict p, .rx-sub-line, .rx-title { overflow-wrap: anywhere; }
+/* A chip may sit on one line, but not at the cost of leaving the box. */
+.rx-chip { white-space: normal; overflow-wrap: anywhere; }
 /* A word, not a badge. Thirty badges down a list is thirty things shouting. */
 .rx-est { font-size: 10.5px; letter-spacing: 0.4px; text-transform: uppercase; color: var(--rx-ink-soft); opacity: 0.7; margin-left: 7px; }
 .rx-ing-note { grid-column: 1 / -1; font-size: 12px; color: var(--rx-ink-soft); line-height: 1.45; margin-top: 2px; }
@@ -554,10 +579,11 @@ const CSS = `
 
 .rx-ask { font-size: 12.5px; color: var(--rx-ink-soft); margin: 0 0 12px; }
 .rx-rate { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 26px; }
+/* Square tags rather than pills. Nothing else in this app is a bubble. */
 .rx-rate button {
   font: inherit; font-size: 13px; cursor: pointer;
   background: var(--rx-card); color: var(--rx-ink);
-  border: 1px solid var(--rx-line); border-radius: 999px; padding: 8px 16px;
+  border: 1px solid var(--rx-line); border-radius: 1px; padding: 9px 18px;
   transition: border-color 140ms ease, background 140ms ease, transform 140ms ease;
 }
 .rx-rate button:hover { border-color: var(--rx-gold); transform: translateY(-1px); }
@@ -606,11 +632,20 @@ const CSS = `
 }
 
 /* --- the fork: two ways forward ---------------------------------------- */
-.rx-fork { max-width: 620px; margin: 0 auto; text-align: center; }
+.rx-fork { max-width: 780px; margin: 0 auto; text-align: center; }
 .rx-fork > h2 { font-size: 25px; margin: 0 0 8px; }
-.rx-fork > p { font-size: 13.5px; color: var(--rx-ink-soft); margin: 0 0 24px; line-height: 1.6; }
-.rx-ways { display: grid; grid-template-columns: 1fr; gap: 14px; }
-@media (min-width: 620px) { .rx-ways { grid-template-columns: 1fr 1fr; } }
+.rx-fork > p { font-size: 13.5px; color: var(--rx-ink-soft); margin: 0 auto 24px; line-height: 1.6; max-width: 520px; }
+/* auto-fit, not a media query. The breakpoint would be measured against the
+   VIEWPORT, but this app is a panel inside the RocketRide shell and its column
+   is narrower than the window — so a viewport rule happily lays out three
+   columns in a space that fits two, and the third goes out through the side.
+   auto-fit asks the container instead, which is the thing that actually
+   constrains it. */
+.rx-ways {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+.rx-way:nth-child(3) { animation-delay: 260ms; }
 
 /* They pop in rather than appear, one after the other, because a choice
    offered a beat apart reads as two options — arriving together it reads as
@@ -620,13 +655,17 @@ const CSS = `
   60%  { transform: translateY(-3px) scale(1.01); }
   100% { opacity: 1; transform: none; }
 }
+/* Index cards, not buttons: square, a gold rule along the top edge, and the
+   heading set in the same serif as everything else worth reading. */
 .rx-way {
-  background: var(--rx-card); border: 1px solid var(--rx-line); border-radius: 4px;
+  background: var(--rx-card); border: 1px solid var(--rx-line); border-radius: 0;
+  border-top: 2px solid var(--rx-gold);
   padding: 22px 20px; text-align: left; cursor: pointer; width: 100%;
   font: inherit; color: inherit;
   animation: rx-pop-in 420ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
-  transition: border-color 140ms ease, transform 140ms ease;
+  transition: border-color 140ms ease, transform 140ms ease, background 140ms ease;
 }
+.rx-way:hover { background: var(--rx-gold-wash); }
 .rx-way:nth-child(2) { animation-delay: 130ms; }
 .rx-way:hover { border-color: var(--rx-gold); transform: translateY(-2px); }
 .rx-way:focus-visible { outline: 2px solid var(--rx-gold); outline-offset: 2px; }
@@ -637,10 +676,13 @@ const CSS = `
 }
 .rx-way p { font-size: 12.5px; color: var(--rx-ink-soft); margin: 0; line-height: 1.5; }
 
-/* --- the grocery run ---------------------------------------------------- */
-.rx-grocery { max-width: 560px; margin: 0 auto; text-align: center; }
+/* --- the grocery run ----------------------------------------------------
+   Set as a paper slip torn off a pad, not a panel: square corners, a ruled
+   row per line, a tally at the foot, and a torn bottom edge. It is a thing
+   carried into a shop, so it should look like one. */
+.rx-grocery { max-width: 520px; margin: 0 auto; text-align: center; }
 .rx-grocery h2 { font-size: 25px; margin: 0 0 8px; }
-.rx-grocery > p { font-size: 13.5px; color: var(--rx-ink-soft); margin: 0 0 20px; line-height: 1.6; }
+.rx-grocery > p { font-size: 13.5px; color: var(--rx-ink-soft); margin: 0 auto 20px; line-height: 1.6; max-width: 430px; }
 
 /* Each item drops into the basket a beat after the one before. The stagger is
    the whole effect: a list that appears all at once is a list, and a list that
@@ -650,22 +692,54 @@ const CSS = `
   70%  { transform: translateY(2px) rotate(1deg); }
   100% { opacity: 1; transform: none; }
 }
+.rx-slip {
+  background: var(--rx-card);
+  border: 1px solid var(--rx-line);
+  border-bottom: 0;
+  padding: 6px 0 0; margin-bottom: 22px; text-align: left;
+  background-image: linear-gradient(178deg, var(--rx-gold-wash) 0%, rgba(255,255,255,0) 38%);
+}
+/* The torn edge along the bottom, drawn rather than pictured. */
+.rx-slip-foot {
+  font-size: 11px; letter-spacing: 1.4px; text-transform: uppercase;
+  color: var(--rx-ink-soft); text-align: right;
+  padding: 12px 16px; border-top: 1px solid var(--rx-line);
+  background:
+    linear-gradient(-45deg, transparent 8px, var(--rx-card) 0) bottom left / 14px 10px repeat-x,
+    var(--rx-card);
+  padding-bottom: 20px;
+}
 .rx-buy {
-  display: grid; grid-template-columns: auto 1fr auto; align-items: baseline; gap: 0 12px;
-  padding: 11px 14px; text-align: left;
+  display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, auto);
+  align-items: baseline; gap: 0 12px;
+  padding: 11px 16px; text-align: left; cursor: pointer;
   border-bottom: 1px solid var(--rx-line);
   animation: rx-drop-in 380ms cubic-bezier(0.2, 0.7, 0.3, 1) both;
+  transition: background 140ms ease;
 }
-.rx-buy:last-child { border-bottom: 0; }
-.rx-buy-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rx-gold); align-self: center; }
-.rx-buy-name { font-size: 14.5px; }
-.rx-buy-qty { font-size: 12.5px; color: var(--rx-ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rx-buy:hover { background: var(--rx-gold-wash); }
+.rx-buy:focus-visible { outline: 2px solid var(--rx-gold); outline-offset: -2px; }
+/* A square box, ticked. Not a bubble — this is a list on paper. */
+.rx-buy-box {
+  width: 16px; height: 16px; align-self: center;
+  border: 1px solid var(--rx-ink-soft); border-radius: 1px;
+  color: #fff; font-size: 11px; line-height: 15px; text-align: center;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.rx-buy.is-got .rx-buy-box { background: var(--rx-gold); border-color: var(--rx-gold); }
+.rx-buy-name { font-size: 14.5px; overflow-wrap: anywhere; }
+.rx-buy-qty {
+  font-size: 12.5px; color: var(--rx-ink-soft); font-variant-numeric: tabular-nums;
+  text-align: right; overflow-wrap: anywhere;
+}
 .rx-buy-why { grid-column: 2 / -1; font-size: 11.5px; color: var(--rx-ink-soft); font-style: italic; margin-top: 3px; }
-.rx-basket-list {
-  background: var(--rx-card); border: 1px solid var(--rx-line); border-radius: 4px;
-  padding: 4px 0; margin-bottom: 20px; text-align: left;
-}
+/* Bought: the row steps back, so what is left is what is still to find. */
+.rx-buy.is-got .rx-buy-name, .rx-buy.is-got .rx-buy-qty { color: var(--rx-ink-soft); opacity: 0.55; }
+.rx-buy.is-got .rx-buy-name { text-decoration: line-through; text-decoration-color: var(--rx-line); }
+
 .rx-where { animation: rx-pop-in 420ms cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+.rx-where-note { font-size: 13.5px; color: var(--rx-ink-soft); margin: 0 auto 16px; line-height: 1.6; max-width: 430px; }
+.rx-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 
 /* --- the mystery pot ---------------------------------------------------- */
 .rx-pot-screen { text-align: center; padding: 26px 0 8px; }
@@ -688,8 +762,10 @@ const CSS = `
 }
 .rx-swirl { transform-box: fill-box; transform-origin: center; animation: rx-swirl 4600ms linear infinite; }
 
-@keyframes rx-stir { 0%, 100% { transform: rotate(-13deg); } 50% { transform: rotate(11deg); } }
-.rx-spoon { transform-box: fill-box; transform-origin: 12% 96%; animation: rx-stir 2300ms ease-in-out infinite; }
+/* Pivots on the ladle's bowl, which sits in the pot — so the handle sweeps
+   and the bowl stays where the food is. */
+@keyframes rx-stir { 0%, 100% { transform: rotate(-11deg); } 50% { transform: rotate(9deg); } }
+.rx-spoon { transform-box: fill-box; transform-origin: 15% 88%; animation: rx-stir 2300ms ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
   .rx-steam, .rx-spark, .rx-way, .rx-buy, .rx-where, .rx-swirl, .rx-spoon,
@@ -771,9 +847,13 @@ const CSS = `
   transform: translateY(-4px);
   border-bottom: 1px dotted var(--rx-line);
 }
+/* NOT nowrap. A quantity is model output, and "3 medium potatoes (about 400g),
+   peeled and cut into 2cm dice" is a quantity it really returns — held on one
+   line that runs straight out of the card and off the screen. It wraps, right
+   aligned, and never takes more than half the row. */
 .rx-menu .rx-ing-qty {
   font-size: 13px; color: var(--rx-ink-soft); font-variant-numeric: tabular-nums;
-  white-space: nowrap; grid-column: 3;
+  grid-column: 3; text-align: right; max-width: 15em; overflow-wrap: anywhere;
 }
 /* Set as a menu's dish description: the note explains the line above it, and
    italic serif says that without needing a label. */
@@ -1130,6 +1210,15 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 	 * against the dish is "Making your list". One screen, one line changed.
 	 */
 	const [cookingTitle, setCookingTitle] = useState('Cooking your recipe');
+	/**
+	 * The shopping list, frozen at the moment the shop is entered.
+	 *
+	 * Ticking an item there marks it as owned, and owned items are exactly the
+	 * ones that drop out of "what is missing" — so a live list would delete each
+	 * row as it went into the basket. A shopping list that empties as you shop
+	 * is not a shopping list.
+	 */
+	const [shopList, setShopList] = useState<ShoppingItem[]>([]);
 	const [error, setError] = useState<string | null>(null);
 	/** A caveat about a result we did produce — distinct from a failure. */
 	const [notice, setNotice] = useState<string | null>(null);
@@ -1627,12 +1716,17 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 		setBusy('Checking what you can swap');
 
 		// Chosen from the fork, this is a step change like any other, so it gets
-		// its own screen — the pot, because what comes back is genuinely unknown
-		// until it arrives. Re-running it from the verdict screen keeps the
-		// banner: there the reader is mid-page with something to look at, and
-		// taking the screen away would be the intrusion, not the courtesy.
+		// a screen — the pan, not the pot. This road keeps the dish and changes
+		// what goes in it; the pot is for the road where the dish itself is
+		// abandoned. Re-running it from the verdict screen keeps the banner:
+		// there the reader is mid-page with something to look at, and taking the
+		// screen away would be the intrusion, not the courtesy.
 		const fromFork = view === 'fork';
-		if (fromFork) setView('improvising');
+		if (fromFork) {
+			setCookingTitle('Working out your swaps');
+			setReelSeconds(null);
+			setView('adjusting');
+		}
 
 		try {
 			const all = recipe.ingredients ?? [];
@@ -1690,6 +1784,13 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 		setError(null);
 		setNotice(null);
 		setBusy(dish ? 'Writing that recipe for what you have' : 'Finding something you can make tonight');
+
+		// The pot belongs to THIS road: the dish is being abandoned and what
+		// comes back is genuinely unknown until it arrives. Reached from the
+		// verdict screen instead, it keeps the banner.
+		const fromFork = view === 'fork';
+		if (fromFork) setView('improvising');
+
 		try {
 			const parsed = await cookAlternative(dish, pantry);
 			if (!parsed.ingredients?.length && !parsed.steps?.length) {
@@ -1712,11 +1813,14 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			setView('verdict');
 		} catch (err) {
 			setError(errText(err));
+			// Never stranded on the pot for work that has stopped; the other two
+			// roads off that screen still work.
+			if (fromFork) setView('fork');
 		} finally {
 			inFlight.current = false;
 			setBusy(null);
 		}
-	}, [cookAlternative, doneIng, fridge, recipe, sub]);
+	}, [cookAlternative, doneIng, fridge, recipe, sub, view]);
 
 	// ----------------------------------------------------------- recipe book
 
@@ -1808,7 +1912,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 					    the banner would be saying it twice. Substitution and the
 					    alternative dish still run behind the verdict screen, and
 					    those keep the banner. */}
-					{busy && view !== 'cooking' && view !== 'improvising' && (
+					{busy && view !== 'cooking' && view !== 'adjusting' && view !== 'improvising' && (
 						<Banner variant={elapsed > SLOW_SECONDS ? 'warning' : 'info'}>
 							{busy} — {elapsed}s{waitText(elapsed)}
 						</Banner>
@@ -1908,8 +2012,22 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 							missingCount={(recipe.ingredients ?? []).length - doneIng.length}
 							missingNames={missingItems.map((m) => m.item)}
 							busy={!!busy}
-							onShop={() => setView('grocery')}
-							onImprovise={() => void runSubstitute()}
+							onShop={() => {
+								// Snapshot before entering, not while inside it.
+								setShopList(missingItems);
+								setView('grocery');
+							}}
+							onAdjust={() => void runSubstitute()}
+							onImprovise={() => void runCookAlternative()}
+						/>
+					)}
+
+					{view === 'adjusting' && (
+						<CookingScreen
+							title={cookingTitle}
+							stage={busy ?? 'Checking what you can swap'}
+							elapsed={elapsed}
+							seconds={null}
 						/>
 					)}
 
@@ -1919,10 +2037,15 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 
 					{view === 'grocery' && recipe && (
 						<GroceryScreen
-							items={missingItems}
-							storeKind={storeQuery(recipe, missingItems)}
-							storeUrl={mapsUrl(storeQuery(recipe, missingItems))}
+							items={shopList}
+							doneIng={doneIng}
+							onToggle={toggleIng}
+							storeKind={storeQuery(recipe, shopList)}
+							storeUrl={mapsUrl(storeQuery(recipe, shopList))}
 							onBack={() => setView('fork')}
+							// Walking out of the shop with everything is the same state the
+							// menu would have produced, so it lands in the same place.
+							onDone={() => setView('celebrate')}
 							onShowRecipe={() => setView('recipe')}
 						/>
 					)}

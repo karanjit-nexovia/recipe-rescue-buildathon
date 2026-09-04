@@ -95,16 +95,26 @@ export const PotScreen: React.FC<PotScreenProps> = ({ stage, elapsed }) => (
 				<path d="M211 132c13 0 19 7 19 15s-6 14-15 14" />
 			</g>
 
-			{/* The spoon, pivoting where it meets the pot. */}
+			{/* The ladle, bowl-down IN the pot with the handle sticking out of it.
+			    It was drawn the other way up first — bowl on the far end of the
+			    handle, waving in the air above the kitchen, stirring nothing. */}
 			<g className="rx-spoon">
 				<path
-					d="M150 120l58-52"
+					d="M154 114l54-48"
 					stroke="var(--rx-ink-soft)"
 					strokeWidth="5"
 					strokeLinecap="round"
 					fill="none"
 				/>
-				<ellipse cx="211" cy="65" rx="9" ry="6" transform="rotate(-42 211 65)" fill="var(--rx-ink-soft)" />
+				<ellipse
+					cx="150"
+					cy="117"
+					rx="12"
+					ry="6.5"
+					transform="rotate(-14 150 117)"
+					fill="var(--rx-ink-soft)"
+					opacity="0.85"
+				/>
 			</g>
 		</svg>
 

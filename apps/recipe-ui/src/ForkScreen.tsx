@@ -18,6 +18,7 @@ export interface ForkScreenProps {
 	/** The first few missing things, so the choice is made on specifics. */
 	missingNames: string[];
 	onShop: () => void;
+	onAdjust: () => void;
 	onImprovise: () => void;
 	busy: boolean;
 }
@@ -26,6 +27,7 @@ export const ForkScreen: React.FC<ForkScreenProps> = ({
 	missingCount,
 	missingNames,
 	onShop,
+	onAdjust,
 	onImprovise,
 	busy,
 }) => {
@@ -39,7 +41,7 @@ export const ForkScreen: React.FC<ForkScreenProps> = ({
 			</h2>
 			<p>
 				{named ? `No ${named}${more > 0 ? `, and ${more} more` : ''}. ` : ''}
-				Two ways forward, and neither of them is giving up.
+				Three ways forward, and none of them is giving up.
 			</p>
 
 			<div className="rx-ways">
@@ -66,6 +68,36 @@ export const ForkScreen: React.FC<ForkScreenProps> = ({
 					</p>
 				</button>
 
+				{/* The middle road, and the one most people want: keep the dish,
+				    change what goes in it. */}
+				<button type="button" className="rx-way" onClick={onAdjust} disabled={busy}>
+					<svg
+						className="rx-way-icon"
+						width="34"
+						height="34"
+						viewBox="0 0 34 34"
+						fill="none"
+						stroke="var(--rx-gold)"
+						strokeWidth="1.8"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						aria-hidden="true"
+					>
+						<path d="M6 11h13" />
+						<path d="M23 11h5" />
+						<circle cx="21" cy="11" r="2.6" />
+						<path d="M6 23h5" />
+						<path d="M15 23h13" />
+						<circle cx="13" cy="23" r="2.6" />
+					</svg>
+					<h3>Let us adjust</h3>
+					<p>
+						Same dish, different contents. What can be swapped, what cannot, and whether it
+						still works without the thing you are short of.
+					</p>
+				</button>
+
+				{/* The third road: a different dinner entirely. */}
 				<button type="button" className="rx-way" onClick={onImprovise} disabled={busy}>
 					<svg
 						className="rx-way-icon"
@@ -83,10 +115,10 @@ export const ForkScreen: React.FC<ForkScreenProps> = ({
 						<path d="M5 14c0 11 2 16 12 16s12-5 12-16" />
 						<path d="M17 14l9-8" />
 					</svg>
-					<h3>Cook with what I have</h3>
+					<h3>Cook something mysterious</h3>
 					<p>
-						Swaps for what is missing where there are any — and if there are not, something
-						else worth eating built from what is already in the kitchen.
+						Forget this dish. Something else worth eating, written from what is already in
+						your kitchen — you will not know what until it arrives.
 					</p>
 				</button>
 			</div>
