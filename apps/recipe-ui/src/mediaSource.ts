@@ -226,7 +226,14 @@ async function resolveYouTube(raw: string): Promise<ResolveOutcome> {
 	};
 	// A real read of what the cook said, so it is held to the same bar as any
 	// other transcript rather than flagged thin on principle.
-	return { kind: 'text', source, text: transcript, thin: transcript.length < 400 };
+	//
+	// 250, not 400: a 45-second Short at normal speaking pace runs to 700-900
+	// characters, but plenty of perfectly good ones come in under 400, and a
+	// “this will be rough” warning on a recipe that turns out fine is worse than
+	// no warning at all. Between here and the hard floor the recipe carries its
+	// own estimate marks inline, which says the same thing per line and says it
+	// where the reader can act on it.
+	return { kind: 'text', source, text: transcript, thin: transcript.length < 250 };
 }
 
 function normalise(

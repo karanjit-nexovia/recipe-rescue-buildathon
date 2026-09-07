@@ -28,3 +28,6 @@ Thumbs.db
 
 # Compiled prompts from scripts/yt-flow.cjs. Regenerated every run.
 .tmp/
+
+# demo recording working files (the finished mp4 is uploaded, not committed)
+demo/

@@ -1621,8 +1621,9 @@ ${titled}`;
 
 						if (outcome.thin) {
 							setNotice(
-								'That link gave only a short caption, not a full recipe. Expect a rough result — ' +
-									'pasting the full caption or dropping the video in gives a much better one.',
+								'The cook said very little out loud in this one, so more of this recipe is ' +
+									'worked out than heard. Anything inferred is marked as an estimate — taste ' +
+									'as you go.',
 							);
 						} else if (outcome.source.warnings.length) {
 							// The resolver knows what it could not see — YouTube gives the
