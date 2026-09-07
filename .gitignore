@@ -29,5 +29,7 @@ Thumbs.db
 # Compiled prompts from scripts/yt-flow.cjs. Regenerated every run.
 .tmp/
 
-# demo recording working files (the finished mp4 is uploaded, not committed)
-demo/
+# Demo recording working files: raw cuts, contact sheets, TTS clips. The finished
+# video IS committed so it can be watched from the repo; nothing else here is.
+demo/*
+!demo/demo-final.mp4

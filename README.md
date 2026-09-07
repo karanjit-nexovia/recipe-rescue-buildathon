@@ -4,6 +4,8 @@
 
 Built solo for the RocketRide × SCU Buildathon, 2026.
 
+**[Watch the demo](demo/demo-final.mp4)** — 2 minutes 46 seconds, the whole flow end to end.
+
 ---
 
 ## The problem this solves
