@@ -1532,6 +1532,10 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 			setView('cooking');
 			try {
 				let transcript = payload.text ?? '';
+				// Set when a link had nothing readable in it and the dish is being
+				// written from its title instead. Changes the JOB, so the prompt has
+				// to be told.
+				let writtenFromTitle = false;
 				let screenText: string | undefined;
 				let scenes: string | undefined;
 				let file = payload.file;
@@ -1584,42 +1588,42 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 ${titled}`;
 						}
 
-						// Below the evidence bar there is no recipe in here to find.
-						// A YouTube title is about thirty characters, and running
-						// extraction on it costs a model call and half a minute to
-						// arrive at a page that says nothing could be read — after
-						// asserting a cuisine, a serving count and a total time that
-						// came from nowhere. Stop at the ingest screen instead, where
-						// the two things that DO work are one action away.
+						// NOTHING WAS SAID OUT LOUD — SO WRITE THE DISH FROM ITS NAME.
+						//
+						// A cooking video set to music transcribes to “[Music] so [Music]
+						// you”. There is no speech to read, and the text path never sees
+						// the frames, so reading the source harder cannot help.
+						//
+						// But the title is right there, the cook typed it, and it names a
+						// dish. Writing “palak paneer” from its name is a job this app
+						// already does well — it is the whole describe-a-dish path. So a
+						// link always ends in a recipe, and the only thing that changes is
+						// where it came from, which the reader is told plainly.
 						const evidence = recipeEvidence(transcript);
 						if (evidence.length < THIN_EVIDENCE_CHARS) {
-							// The warmed ask task is deliberately NOT released here.
-							// This message sends the reader to the paste box, and
-							// what they paste needs that same task within seconds —
-							// giving it back now just buys another cold start.
-							// The caption names the dish even when it carries no method:
-							// “Horchata à la Nick DiGiovanni” is something a cook can be
-							// handed. Seed the describe box with the caption AS IT STANDS —
-							// the tags are useful context for a dish the model must write
-							// from its name, and the raw string clears the box’s own 20-char
-							// minimum where a bare “Horchata” would not — so the way out of
-							// this dead end is one press, not retyping what the app just read.
-							if (titled) {
-								setPasted(titled);
-								setSourceMode('describe');
+							if (!titled) {
+								// No speech AND no title is a link with nothing in it at all.
+								throw new ResolveError(
+									'no-media',
+									'There was nothing readable in that link — no words spoken, and no title ' +
+										'to go on. Go back and describe the dish, and I will write it.',
+								);
 							}
-
-							throw new ResolveError(
-								'no-media',
-								outcome.source.platform === 'youtube'
-									? 'YouTube only hands over the video title — “' +
-											transcript.trim() +
-											'” — and never the description, which is where the recipe is. Open the video and copy the description into the box below.'
-									: 'That link only gave a few words, not enough to build a recipe from. Paste the recipe text into the box below, or tell me the dish and I will write it.',
+							writtenFromTitle = true;
+							transcript = titled;
+							// The title IS the source now, so it must not also arrive as
+							// corroborating evidence for a transcript that does not exist.
+							screenText = undefined;
+							setNotice(
+								`Nobody spoke in that video, so there was nothing to transcribe. I have written ` +
+									`this from its title instead — “${titled}” — which means it is a good version ` +
+									`of the dish rather than that cook’s exact one.`,
 							);
 						}
 
-						if (outcome.thin) {
+						// Not when the title became the source: that already set a notice,
+						// and it says something truer than “the cook said very little”.
+						if (!writtenFromTitle && outcome.thin) {
 							setNotice(
 								'The cook said very little out loud in this one, so more of this recipe is ' +
 									'worked out than heard. Anything inferred is marked as an estimate — taste ' +
@@ -1757,7 +1761,9 @@ ${titled}`;
 				// Describing a dish and reading a reel are different jobs, and the
 				// prompt has to know which one it is being asked to do.
 				const describedByUser =
-					payload.described || (!payload.link && !payload.file && sourceMode === 'describe');
+					writtenFromTitle ||
+					payload.described ||
+					(!payload.link && !payload.file && sourceMode === 'describe');
 				const parsed = await extractRecipe(
 					transcript,
 					screenText,
