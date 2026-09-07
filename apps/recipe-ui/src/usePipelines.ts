@@ -206,7 +206,7 @@ export function usePipelines() {
 
 	/**
 	 * Hand back a task warmed for work that turned out not to happen — an
-	 * Instagram link that resolved to a caption instead of a video, say.
+	 * link that resolved to a caption instead of a video, say.
 	 *
 	 * The ttl would reap it in three minutes regardless; this is about not
 	 * paying for those three minutes every time a prediction misses.

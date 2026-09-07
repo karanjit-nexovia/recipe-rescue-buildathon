@@ -19,7 +19,6 @@ import {
 	Button,
 	Card,
 	ContentHeader,
-	DropZone,
 	EmptyState,
 	StatusBadge,
 	TabControl,
@@ -36,14 +35,11 @@ import { GroceryScreen } from './GroceryScreen';
 import { PotScreen } from './PotScreen';
 import { mmss, SLOW_SECONDS } from './format';
 import {
-	detectPlatform,
 	fetchMediaAsFile,
 	looksLikeLink,
+	recipeEvidence,
 	resolveMediaSource,
 	ResolveError,
-	verifiedProviders,
-	VIDEO_PAUSED,
-	VIDEO_PAUSED_REASON,
 } from './mediaSource';
 import type { MediaSource, ResolveOutcome } from './mediaSource';
 import type { Ingredient, Recipe, SavedRecipe, Step, SubLine, Substitution } from './types';
@@ -1470,7 +1466,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 
 	/**
 	 * Download the resolved video, and re-resolve exactly once if the CDN link
-	 * has already expired. Signed Instagram URLs are short-lived, so this is a
+	 * has already expired. Signed CDN URLs are short-lived, so this is a
 	 * routine case rather than an error — but one retry only, never a loop.
 	 */
 	const fetchWithOneRetry = useCallback(async (source: MediaSource, rawLink: string): Promise<File> => {
@@ -1547,15 +1543,12 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 				// certain to need now, so they warm up alongside the resolve and
 				// the download instead of after them.
 				//
-				// `detectPlatform` is a synchronous URL check, so this costs
-				// nothing to decide: an Instagram link is the video path and will
-				// reach the transcribe task; TikTok and YouTube only ever come
-				// back as text and must NOT warm it. Nothing here warms
-				// screentext or vision — those are the escalated rungs, and a
-				// task bills while alive whether or not it is ever climbed.
-				const platform = payload.link ? detectPlatform(payload.link) : undefined;
-				if (platform === 'instagram') prewarm('transcribe');
-				else if (!payload.file) prewarm('ask');
+				// A link is always the text path now: YouTube is the only provider,
+				// and it comes back as a transcript. So the only task worth warming
+				// is `ask`. Nothing here warms transcribe, screentext or vision —
+				// those serve the video path, and a task bills while alive whether
+				// or not it is ever used.
+				if (!payload.file) prewarm('ask');
 
 				if (payload.link) {
 					setBusy('Checking the link');
@@ -1566,15 +1559,6 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 					}
 
 					if (outcome.kind === 'text') {
-						// The video path was predicted from the host and did not
-						// happen: this reel came back as a caption. Hand the warmed
-						// task back rather than paying out its idle ttl, and warm
-						// the rung this run will actually reach instead.
-						if (platform === 'instagram') {
-							release('transcribe');
-							prewarm('ask');
-						}
-
 						// A caption or title — usable, but nothing was watched or
 						// heard. Say so rather than letting it pass as a full read.
 						transcript = outcome.text;
@@ -1590,7 +1574,7 @@ const Content: React.FC<ShellAppProps> = ({ isConnected }) => {
 						//
 						// The title is typed by the cook, so it is the one place the
 						// real name survives. It rides along as corroboration, the
-						// same way an Instagram caption does, and the prompt is told
+						// same way a caption does, and the prompt is told
 						// it outranks the transcript on names.
 						const titled = (outcome.source.caption ?? '').trim();
 						if (titled) {
@@ -1607,18 +1591,31 @@ ${titled}`;
 						// asserting a cuisine, a serving count and a total time that
 						// came from nowhere. Stop at the ingest screen instead, where
 						// the two things that DO work are one action away.
-						if (transcript.trim().length < THIN_EVIDENCE_CHARS) {
+						const evidence = recipeEvidence(transcript);
+						if (evidence.length < THIN_EVIDENCE_CHARS) {
 							// The warmed ask task is deliberately NOT released here.
 							// This message sends the reader to the paste box, and
 							// what they paste needs that same task within seconds —
 							// giving it back now just buys another cold start.
+							// The caption names the dish even when it carries no method:
+							// “Horchata à la Nick DiGiovanni” is something a cook can be
+							// handed. Seed the describe box with the caption AS IT STANDS —
+							// the tags are useful context for a dish the model must write
+							// from its name, and the raw string clears the box’s own 20-char
+							// minimum where a bare “Horchata” would not — so the way out of
+							// this dead end is one press, not retyping what the app just read.
+							if (titled) {
+								setPasted(titled);
+								setSourceMode('describe');
+							}
+
 							throw new ResolveError(
 								'no-media',
 								outcome.source.platform === 'youtube'
 									? 'YouTube only hands over the video title — “' +
 											transcript.trim() +
 											'” — and never the description, which is where the recipe is. Open the video and copy the description into the box below.'
-									: 'That link only gave a few words, not enough to build a recipe from. Paste the caption into the box below, or tell me the dish and I will write it.',
+									: 'That link only gave a few words, not enough to build a recipe from. Paste the recipe text into the box below, or tell me the dish and I will write it.',
 							);
 						}
 
@@ -1818,7 +1815,7 @@ ${titled}`;
 				setBusy(null);
 			}
 		},
-		[describeFrames, extractRecipe, prewarm, readScreenText, release, sourceMode, transcribe],
+		[describeFrames, extractRecipe, prewarm, readScreenText, release, setPasted, setSourceMode, sourceMode, transcribe],
 	);
 
 	/** DropZone never filters by type — the host validates. Do it before the
@@ -2441,23 +2438,17 @@ const IngestView: React.FC<{
 
 			{mode === 'link' && (
 				<>
-			<Card header="Paste a cooking video or recipe link">
+			<Card header="Paste a YouTube link">
 				<p style={{ ...s.muted, marginTop: 0 }}>
-					Working now for {verifiedProviders().join(' and ')}. Anything else — paste the
-					recipe text below, or tell me the dish and I will write it.
+					A YouTube video or Short — it reads what the cook actually said, which is the next
+					best thing to standing in the kitchen with them. Anything else — go back and
+					describe the dish instead, and I will write it.
 				</p>
-				{VIDEO_PAUSED && (
-					<Banner variant="info">
-						<strong>Instagram and video uploads are paused for the competition.</strong>{' '}
-						{VIDEO_PAUSED_REASON} A YouTube link reads what the cook actually said, and costs
-						a fraction of a video — so it is the one to try.
-					</Banner>
-				)}
 				<div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
 					<input
 						style={{ ...s.textarea, minHeight: 0, flex: '1 1 22rem', padding: '10px 12px' }}
 						value={link}
-						placeholder="https://www.youtube.com/watch?v=… or a TikTok link"
+						placeholder="https://www.youtube.com/shorts/… or a full YouTube link"
 						onChange={(e) => setLink(e.target.value)}
 						onKeyDown={(e) => {
 							if (e.key === 'Enter') submitLink();
@@ -2469,16 +2460,6 @@ const IngestView: React.FC<{
 				</div>
 			</Card>
 
-			{/* The upload box is hidden, not deleted: onFiles, the duration probe
-			    and the whole video pipeline behind it are untouched, and clearing
-			    VIDEO_PAUSED brings it straight back. */}
-			{!VIDEO_PAUSED && (
-				<DropZone
-					title="Or drop the video here"
-					hint={`One at a time — MP4, MOV or WEBM, up to ${MAX_REEL_SECONDS} seconds. Works even when the reel has no words at all.`}
-					onFiles={onFiles}
-				/>
-			)}
 				</>
 			)}
 
@@ -2545,10 +2526,10 @@ const SourceView: React.FC<{ onPick: (mode: SourceMode) => void }> = ({ onPick }
 		</div>
 		<div className="rx-choices">
 			<button type="button" className="rx-choice" onClick={() => onPick('link')}>
-				<b>I have a link</b>
+				<b>I have a YouTube link</b>
 				<span>
-					A YouTube or TikTok link. YouTube gives me what the cook actually said, which is
-					the next best thing to standing in the kitchen with them.
+					A video or a Short. It gives me what the cook actually said, which is the next
+					best thing to standing in the kitchen with them.
 				</span>
 			</button>
 			<button type="button" className="rx-choice" onClick={() => onPick('describe')}>

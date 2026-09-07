@@ -5,20 +5,17 @@
 // client.sendFiles(). Everything here exists to produce that File, or to fail
 // in a way the user can act on. No second recipe pipeline.
 //
-// Providers differ in how much they will give up:
+// One provider is wired up:
 //
-//   instagram  needs a server-side resolver (see resolver/ in this repo) —
-//              nothing about a reel is readable from the browser, and the
-//              platform's own HTTP tool truncates responses to ~79 chars, so
-//              a RocketRide-internal resolver cannot return a CDN URL.
-//   tiktok     oEmbed, CORS "*" — full caption, no video URL
-//   youtube    oEmbed, CORS echoes origin — title only, no description
+//   youtube    the resolver returns the spoken transcript; oEmbed supplies the
+//              title, which is where the dish's real name survives a phonetic
+//              machine transcript.
 //
 // Adding a provider means adding one entry to PROVIDERS. Nothing downstream
 // of resolveMediaSource() needs to know which platform it came from.
 // =============================================================================
 
-export type Platform = 'instagram' | 'tiktok' | 'youtube' | 'unsupported';
+export type Platform = 'youtube' | 'unsupported';
 
 /** Normalised result. Optional fields are genuinely optional per provider. */
 export interface MediaSource {
@@ -137,8 +134,6 @@ export function detectPlatform(raw: string): Platform {
 	} catch {
 		return 'unsupported';
 	}
-	if (host === 'instagram.com' || host.endsWith('.instagram.com')) return 'instagram';
-	if (host === 'tiktok.com' || host.endsWith('.tiktok.com')) return 'tiktok';
 	if (host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtu.be') return 'youtube';
 	return 'unsupported';
 }
@@ -146,31 +141,6 @@ export function detectPlatform(raw: string): Platform {
 /** True for anything that looks like a URL, so one input box can serve both. */
 export function looksLikeLink(raw: string): boolean {
 	return /^\s*(https?:\/\/|www\.)\S+\s*$/i.test(raw);
-}
-
-/**
- * Validate and canonicalise an Instagram post URL.
- *
- * Deliberately strict: an allowlisted host, one of three known post shapes,
- * and a shortcode. Profile URLs, hosts that merely contain "instagram", raw
- * IPs and localhost all fail here, before anything leaves the browser. The
- * resolver must never become a general-purpose proxy.
- */
-export function canonicaliseInstagram(raw: string): string {
-	const url = stripTracking(parseUrl(raw));
-	const host = url.hostname.replace(/^www\./i, '').toLowerCase();
-	if (host !== 'instagram.com') {
-		throw new ResolveError('wrong-host', 'That is not an Instagram link.');
-	}
-	const match = url.pathname.match(/^\/(reel|reels|p)\/([A-Za-z0-9_-]{5,32})\/?$/);
-	if (!match) {
-		throw new ResolveError(
-			'not-a-post',
-			'That looks like a profile or a search page, not a single reel. Open the reel itself and copy its link.',
-		);
-	}
-	// /reels/ and /p/ both address the same object as /reel/.
-	return `https://www.instagram.com/reel/${match[2]}/`;
 }
 
 // -----------------------------------------------------------------------------
@@ -209,90 +179,6 @@ async function getJson(url: string, timeoutMs: number, init?: RequestInit): Prom
 	}
 }
 
-async function resolveInstagram(raw: string): Promise<ResolveOutcome> {
-	// Refused before the actor run, so a pasted reel costs nothing anywhere.
-	if (VIDEO_PAUSED) {
-		throw new ResolveError(
-			'not-configured',
-			`Instagram reels are paused for the competition. ${VIDEO_PAUSED_REASON} ` +
-				'A TikTok or YouTube link works now, or paste the recipe text, or just tell me the ' +
-				'dish and I will write it.',
-		);
-	}
-
-	const canonicalUrl = canonicaliseInstagram(raw);
-
-	if (!RESOLVER_ENDPOINT) {
-		throw new ResolveError(
-			'not-configured',
-			'Instagram links need the resolver service, which is not configured yet. ' +
-				'Copy the caption or download the reel and drop it in below.',
-		);
-	}
-
-	const data = (await getJson(RESOLVER_ENDPOINT, RESOLVER_TIMEOUT_MS, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
-		body: JSON.stringify({ url: canonicalUrl }),
-	})) as Partial<MediaSource> & { error?: string; code?: ResolveErrorCode };
-
-	if (data?.error) {
-		throw new ResolveError(data.code ?? 'resolver-empty', data.error, data.code === 'media-expired');
-	}
-	if (!data?.mediaUrl) {
-		// Caption without video is still usable — degrade rather than fail.
-		if (data?.caption) {
-			const source = normalise('instagram', raw, canonicalUrl, data);
-			return { kind: 'text', source, text: data.caption, thin: data.caption.length < 140 };
-		}
-		throw new ResolveError('no-media', 'That reel came back with no video and no caption. It may be private or restricted.');
-	}
-
-	return { kind: 'media', source: normalise('instagram', raw, canonicalUrl, data) };
-}
-
-async function resolveTikTok(raw: string): Promise<ResolveOutcome> {
-	const canonicalUrl = stripTracking(parseUrl(raw)).toString();
-	const data = (await getJson(
-		`https://www.tiktok.com/oembed?url=${encodeURIComponent(canonicalUrl)}`,
-		RESOLVER_TIMEOUT_MS,
-	)) as OEmbed;
-
-	const caption = (data.title ?? '').trim();
-	if (!caption) {
-		throw new ResolveError(
-			'no-media',
-			'That TikTok has no caption to read. Paste the recipe text below, or tell me the dish ' +
-				'and I will write it.',
-		);
-	}
-	const source: MediaSource = {
-		platform: 'tiktok',
-		originalUrl: raw,
-		canonicalUrl,
-		caption,
-		thumbnailUrl: data.thumbnail_url,
-		resolverConfidence: caption.length >= 140 ? 'medium' : 'low',
-		warnings: ['TikTok gives the caption but not the video, so nothing spoken or shown on screen was read.'],
-	};
-	return { kind: 'text', source, text: caption, thin: caption.length < 140 };
-}
-
-/**
- * YouTube, via the resolver's transcript path.
- *
- * The browser cannot do this alone. oEmbed is the only endpoint reachable from
- * here and it yields the title and nothing else: the description is unreachable
- * because the player API returns 403 whenever an Origin header is present, and
- * the caption endpoint now serves zero bytes to an unauthenticated request. The
- * video itself is on googlevideo.com, which sends no permissive CORS header, so
- * unlike Instagram there is no direct download to fall back on.
- *
- * So the resolver fetches the spoken transcript server-side. That makes YouTube
- * a text source rather than a media one — no frames, no OCR, no vision — and
- * the warning says as much, because a quantity shown only in an overlay will
- * not be in here.
- */
 async function resolveYouTube(raw: string): Promise<ResolveOutcome> {
 	const canonicalUrl = stripTracking(parseUrl(raw)).toString();
 
@@ -369,38 +255,30 @@ function normalise(
 }
 
 const PROVIDERS: Record<Exclude<Platform, 'unsupported'>, (raw: string) => Promise<ResolveOutcome>> = {
-	instagram: resolveInstagram,
-	tiktok: resolveTikTok,
 	youtube: resolveYouTube,
 };
 
-/** Providers the UI should advertise as working right now. */
 /**
- * VIDEO IS PAUSED FOR THE COMPETITION — remove after 2026-09-06.
+ * What is left of a caption once the parts that are never recipe text are
+ * taken out of it.
  *
- * Reading a video is the only expensive thing this app does: roughly 760
- * platform tokens a run against a balance that has to cover every judge and
- * every tester between now and the deadline, where a text run costs about 33.
- * Two paths reach it — an Instagram link, and a video dropped from disk — and
- * both are closed here rather than one, because the reason applies identically
- * to each and a "drop the video here" box beside a notice explaining that
- * Instagram is off for cost reasons would simply be the same hole, unlabelled.
+ * A social caption is conventionally a dish name, an @mention crediting
+ * whoever the cook learned it from, and then five or six hashtags. Measured
+ * raw, that clears the evidence bar on length alone — the Horchata post that
+ * exposed this reads 97 characters, of which 61 are tags and a mention and 33
+ * are the dish name. So the app spent a run on a caption with no recipe in it
+ * and arrived at a dead end, which is the one outcome the evidence bar exists
+ * to prevent.
  *
- * Nothing about the pipeline is deleted. transcribe, screentext and vision are
- * intact, the reel cap and the caption question are intact, and lifting this
- * one constant turns them all back on.
+ * Stripping them is not the same as ignoring them: the full caption still
+ * goes to the model as the title, where the dish's real name lives. This is
+ * only about how much RECIPE there is to read.
  */
-export const VIDEO_PAUSED = true;
-
-export const VIDEO_PAUSED_REASON =
-	'Reading a video costs about twenty times what reading text does, and this is running on a ' +
-	'fixed competition budget that has to last every person who tries it. Instagram links and ' +
-	'video uploads are off until judging closes.';
-
-export function verifiedProviders(): string[] {
-	const names = ['TikTok', 'YouTube'];
-	if (VIDEO_PAUSED) return names;
-	return RESOLVER_ENDPOINT ? ['Instagram', ...names] : names;
+export function recipeEvidence(text: string): string {
+	return text
+		.replace(/[#@][\p{L}\p{N}_.]+/gu, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
 }
 
 /** The one entry point. Never throws for an unknown platform — returns a typed result. */
@@ -411,8 +289,8 @@ export async function resolveMediaSource(raw: string): Promise<ResolveOutcome> {
 			kind: 'unsupported',
 			platform,
 			message:
-				`Links work for ${verifiedProviders().join(', ')}. For anything else, paste the ` +
-				'recipe text below, or tell me the dish and I will write it.',
+				'Links work for YouTube — a video or a Short. For anything else, go back and ' +
+				'describe the dish, and I will write it.',
 		};
 	}
 	return PROVIDERS[platform](raw);
@@ -475,7 +353,7 @@ export async function fetchMediaAsFile(source: MediaSource, signal?: AbortSignal
 		// fetch() rejected before any response arrived, so there is no status to
 		// report and the reason is deliberately hidden from us. In practice this
 		// is the browser refusing the request, not the CDN: a tracker/ad blocker
-		// or strict privacy mode dropping *.cdninstagram.com is by far the most
+		// or strict privacy mode dropping the media CDN is by far the most
 		// common cause, since the CDN itself answers with
 		// `Access-Control-Allow-Origin: *`.
 		//
@@ -484,7 +362,7 @@ export async function fetchMediaAsFile(source: MediaSource, signal?: AbortSignal
 		// The caller falls back to the caption instead, which is the useful move.
 		throw new ResolveError(
 			'media-unreachable',
-			'Your browser blocked the download from Instagram’s video servers — usually an ad or tracker blocker.',
+			'Your browser blocked the download from the video servers — usually an ad or tracker blocker.',
 		);
 	} finally {
 		clearTimeout(timer);
