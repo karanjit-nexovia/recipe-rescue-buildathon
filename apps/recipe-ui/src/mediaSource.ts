@@ -227,13 +227,17 @@ async function resolveYouTube(raw: string): Promise<ResolveOutcome> {
 	// A real read of what the cook said, so it is held to the same bar as any
 	// other transcript rather than flagged thin on principle.
 	//
-	// 250, not 400: a 45-second Short at normal speaking pace runs to 700-900
-	// characters, but plenty of perfectly good ones come in under 400, and a
-	// “this will be rough” warning on a recipe that turns out fine is worse than
-	// no warning at all. Between here and the hard floor the recipe carries its
-	// own estimate marks inline, which says the same thing per line and says it
-	// where the reader can act on it.
-	return { kind: 'text', source, text: transcript, thin: transcript.length < 250 };
+	// 400 characters. A cook who talks through a whole recipe — what goes in,
+	// how much, and what to watch for — produces 600-900 characters of speech;
+	// the best measured run here was 839, and gave 21 ingredients and 11 steps
+	// with cues on 10 of them. So a transcript under 400 is not a short video,
+	// it is a cook who did not say much, and the recipe will lean on inference.
+	//
+	// This was briefly 250, to stop a banner firing on good Shorts. That was
+	// treating the symptom: the banner was worth suppressing because its text
+	// was wrong, not because the signal was. The text is fixed, so the bar goes
+	// back where the evidence puts it.
+	return { kind: 'text', source, text: transcript, thin: transcript.length < 400 };
 }
 
 function normalise(
